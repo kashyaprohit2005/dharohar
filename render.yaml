@@ -24,8 +24,10 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
-        sync: false
-        value: https://dharohar-frontend.onrender.com
+        fromService:
+          type: web
+          name: dharohar-frontend
+          envVarKey: RENDER_EXTERNAL_URL
 
   # ─────────────────────────────────────────────────────────
   # SERVICE 2: Dharohar Frontend (Next.js 16 + React 19 + SSR)
@@ -44,5 +46,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_API_BASE_URL
-        sync: false
-        value: https://dharohar-backend.onrender.com
+        fromService:
+          type: web
+          name: dharohar-backend
+          envVarKey: RENDER_EXTERNAL_URL
