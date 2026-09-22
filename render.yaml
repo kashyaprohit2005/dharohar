@@ -1,0 +1,52 @@
+# Render Blueprint Specification for Dharohar Monorepo
+# https://render.com/docs/blueprint-spec
+
+services:
+  # ─────────────────────────────────────────────────────────
+  # SERVICE 1: Dharohar Backend (FastAPI + Python + Uvicorn)
+  # ─────────────────────────────────────────────────────────
+  - type: web
+    name: dharohar-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:///./craftproof.db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: dharohar-frontend
+          property: host
+
+  # ─────────────────────────────────────────────────────────
+  # SERVICE 2: Dharohar Frontend (Next.js 16 + React 19 + SSR)
+  # ─────────────────────────────────────────────────────────
+  - type: web
+    name: dharohar-frontend
+    runtime: node
+    rootDir: frontend
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: dharohar-backend
+          property: host

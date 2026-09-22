@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: #FAF6EE;
+  --foreground: #111111;
+  --ink: #0a0a0a;
+  --muted: #8d8d8d;
+  --subtle: #b6b6b6;
+  --line: #e6e5e2;
+  --surface: #f1f0ee;
+  --surface-2: #e3e2df;
+  --accent: #b15f2c;
+  --accent-from: #cf8047;
+  --accent-to: #97501f;
+  --radius-pill: 9999px;
+  --radius-card: 2rem;
+  --radius-card-sm: 1.25rem;
+  --radius-control: 0.875rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ffffff;
+  color: #111111;
+  font-family: 'Onest', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  max-width: 88rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+@media (min-width: 640px) {
+  .shell {
+    padding-inline: 2rem;
+  }
+}
+
+/* Watermark typography */
+.watermark-text {
+  font-size: clamp(3.5rem, 12vw, 11rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Glass card styling */
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(230, 229, 226, 0.8);
+}
+
+.dark-glass-card {
+  background: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f0ee;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d3cf;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b6b6b6;
+}
+
+/* Leaflet Container styles - Rich Antique Cartographic Canvas */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  font-family: 'Onest', sans-serif !important;
+  background-color: #F4EFE6 !important;
+  background-image: 
+    /* Soft oceanic wash in water bodies (Southwest, Southeast, South) */
+    radial-gradient(ellipse at 18% 78%, rgba(56, 128, 150, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 82% 78%, rgba(56, 128, 150, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 115%, rgba(56, 128, 150, 0.10) 0%, transparent 60%),
+    /* Classical cartographic coordinate graticule grid */
+    linear-gradient(to right, rgba(175, 150, 120, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(175, 150, 120, 0.09) 1px, transparent 1px),
+    /* Soft radial vignette */
+    radial-gradient(circle at 50% 45%, transparent 60%, rgba(190, 165, 130, 0.12) 100%) !important;
+  background-size: 100% 100%, 100% 100%, 100% 100%, 72px 72px, 72px 72px, 100% 100% !important;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 1rem !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #e6e5e2;
+  font-family: 'Onest', sans-serif !important;
+}
+
+/* Fade in animation keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Risk badges */
+.badge-stable {
+  background-color: rgba(5, 150, 105, 0.1);
+  color: #059669;
+  border: 1px solid rgba(5, 150, 105, 0.2);
+}
+
+.badge-watch {
+  background-color: rgba(217, 119, 6, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(217, 119, 6, 0.2);
+}
+
+.badge-limited {
+  background-color: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
