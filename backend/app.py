@@ -605,19 +605,24 @@ cors_origins = [
 ]
 if frontend_env:
     for u in frontend_env.split(","):
-        if u.strip():
-            cors_origins.append(u.strip())
+        clean_u = u.strip().rstrip("/")
+        if clean_u:
+            cors_origins.append(clean_u)
+            cors_origins.append(clean_u + "/")
 if allowed_origins_env:
     for u in allowed_origins_env.split(","):
-        if u.strip():
-            cors_origins.append(u.strip())
+        clean_u = u.strip().rstrip("/")
+        if clean_u:
+            cors_origins.append(clean_u)
+            cors_origins.append(clean_u + "/")
 
 # Deduplicate
 cors_origins = list(dict.fromkeys(cors_origins))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if os.getenv("ENVIRONMENT") == "production" else ["*"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
