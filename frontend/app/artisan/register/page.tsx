@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import { useAuthStore } from '@/lib/store';
-import { API_BASE_URL } from '@/lib/api';
 
 interface VoiceStep {
   key: string;
@@ -177,7 +176,7 @@ export default function ArtisanRegisterPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/artisan/register`, {
+      const res = await fetch('http://localhost:8000/api/artisan/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)

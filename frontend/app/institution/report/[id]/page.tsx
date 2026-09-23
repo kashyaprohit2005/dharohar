@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '../../../components/Navbar';
-import { API_BASE_URL } from '@/lib/api';
 
 interface ReportData {
   report_id: string;
@@ -38,7 +37,7 @@ export default function InstitutionReportView() {
 
   useEffect(() => {
     if (!reportId) return;
-    fetch(`${API_BASE_URL}/api/institution/report/${reportId}`)
+    fetch(`http://localhost:8000/api/institution/report/${reportId}`)
       .then(res => {
         if (!res.ok) throw new Error("Report not found or consent has expired.");
         return res.json();

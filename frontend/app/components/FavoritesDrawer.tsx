@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bookmark, X, Calendar, MapPin, Trash2, Sparkles, ArrowRight } from "lucide-react";
 import axios from "axios";
-import { API_BASE_URL } from "@/lib/api";
 
 interface FavoriteItem {
   id: number;
@@ -46,7 +45,7 @@ export default function FavoritesDrawer({ isOpen, onClose }: FavoritesDrawerProp
     if (!userId) return;
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/favorites?user_id=${userId}`);
+      const res = await axios.get(`http://localhost:8000/api/favorites?user_id=${userId}`);
       if (res.data) {
         setHeritages(res.data.heritage || []);
         setEvents(res.data.events || []);
@@ -66,7 +65,7 @@ export default function FavoritesDrawer({ isOpen, onClose }: FavoritesDrawerProp
 
   const handleRemove = async (type: "heritage" | "event", id: string | number) => {
     try {
-      await axios.post(`${API_BASE_URL}/api/favorites/toggle`, {
+      await axios.post("http://localhost:8000/api/favorites/toggle", {
         user_identifier: userId,
         entity_type: type,
         entity_id: String(id)

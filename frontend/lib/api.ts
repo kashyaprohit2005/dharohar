@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-const rawApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-export const API_BASE_URL = rawApiUrl.replace(/\/+$/, '');
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -76,19 +75,19 @@ export const searchAPI = {
 
 export const geoAPI = {
   states: () => api.get('/api/geo/states'),
-  districts: (stateCode: string) => api.get(`/api/geo/states/${stateCode}/districts`),
-  districtDetail: (districtSlug: string) => api.get(`/api/geo/districts/${districtSlug}`),
-  districtItems: (districtSlug: string, category?: string) =>
-    api.get(`/api/geo/districts/${districtSlug}/items`, { params: category ? { category } : {} }),
-  itemDetail: (itemSlug: string) => api.get(`/api/geo/items/${itemSlug}`),
-  itemStory: (itemSlug: string) => api.get(`/api/geo/items/${itemSlug}/story`),
-  search: (query: string) => api.get('/api/geo/search', { params: { q: query } }),
+  districts: (stateCode: string = 'HR') => api.get(`/api/geo/states/${stateCode}/districts`),
+  district: (districtSlug: string) => api.get(`/api/geo/districts/${districtSlug}`),
+  localities: (districtSlug: string) => api.get(`/api/geo/districts/${districtSlug}/localities`),
+  locality: (localitySlug: string) => api.get(`/api/geo/localities/${localitySlug}`),
+  localityItems: (localitySlug: string) => api.get(`/api/geo/localities/${localitySlug}/items`),
+  item: (itemSlug: string | number) => api.get(`/api/geo/items/${itemSlug}`),
+  story: (itemSlug: string | number) => api.get(`/api/geo/items/${itemSlug}/story`),
+  recommendations: (itemSlug: string | number) => api.get(`/api/geo/items/${itemSlug}/recommendations`),
+  related: (itemSlug: string | number) => api.get(`/api/geo/items/${itemSlug}/related`),
+  search: (q: string) => api.get('/api/geo/search', { params: { q } }),
+  eventsNearby: (params?: { district?: string; lat?: number; lon?: number; radius?: number }) =>
+    api.get('/api/geo/events/nearby', { params }),
   categories: () => api.get('/api/geo/categories'),
-  indiaStatesGeoJson: () => api.get('/api/geo/geojson/india-states'),
-  haryanaDistrictsGeoJson: () => api.get('/api/geo/geojson/haryana-districts'),
-  recommendations: (itemSlug: string) => api.get(`/api/geo/items/${itemSlug}/recommendations`),
-  shareCard: (itemSlug: string) => api.get(`/api/geo/items/${itemSlug}/share-card`),
-  relatedItems: (itemSlug: string) => api.get(`/api/geo/items/${itemSlug}/related`),
 };
 
 export default api;

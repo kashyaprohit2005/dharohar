@@ -9,7 +9,9 @@ import MobileHeritageSheet from "../components/MobileHeritageSheet";
 import EventCard, { CulturalEventData } from "../components/EventCard";
 import SocialShareModal, { ShareItem } from "../components/SocialShareModal";
 import HeritageTrail, { recordTrailStop } from "../components/HeritageTrail";
-import { heritageAPI, API_BASE_URL } from "@/lib/api";
+import StateCulturalModal from "../components/StateCulturalModal";
+import { getStateCulturalProfile, StateCulturalProfile } from "../data/odopCulturalData";
+import { heritageAPI } from "@/lib/api";
 import { CULTURAL_DOMAINS, INDIA_STATES_DATA, REGIONAL_ZONES } from "../data/indiaGeoData";
 import { 
   Sparkles, 
@@ -29,11 +31,12 @@ import axios from "axios";
 const IndiaMap = dynamic(() => import("../components/IndiaMap"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[620px] rounded-3xl bg-stone-900 flex items-center justify-center text-sm text-stone-400 border border-stone-800">
+    <div className="w-full h-[620px] rounded-3xl bg-[#FAF6EE] flex flex-col items-center justify-center text-sm text-[#78350F] border border-[#E2D8C3] shadow-xs">
       <div className="flex items-center gap-3">
-        <div className="w-5 h-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin"></div>
-        <span className="font-serif">Initializing Dharohar Living Culture Atlas...</span>
+        <div className="w-5 h-5 rounded-full border-2 border-[#B45309] border-t-transparent animate-spin"></div>
+        <span className="font-serif font-semibold">Initializing Dharohar Living Culture Atlas...</span>
       </div>
+      <span className="text-[10px] text-stone-500 font-mono tracking-widest uppercase mt-2">Survey of India Boundaries • Verified Records</span>
     </div>
   ),
 });
@@ -49,6 +52,8 @@ export default function AtlasMapPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeHeritageId, setActiveHeritageId] = useState<number | null>(null);
   const [stateProfile, setStateProfile] = useState<any | null>(null);
+  const [stateModalOpen, setStateModalOpen] = useState<boolean>(false);
+  const [currentCulturalProfile, setCurrentCulturalProfile] = useState<StateCulturalProfile | null>(null);
   const [loading, setLoading] = useState(true);
   
   // View Mode: map | gallery | events
@@ -64,7 +69,7 @@ export default function AtlasMapPage() {
     Promise.all([
       heritageAPI.list(), 
       heritageAPI.states(),
-      axios.get(`${API_BASE_URL}/api/events`).then(res => res.data).catch(() => [])
+      axios.get("http://localhost:8000/api/events").then(res => res.data).catch(() => [])
     ])
       .then(([hRes, sRes, evData]) => {
         setHeritageList(hRes.data || []);
@@ -82,10 +87,36 @@ export default function AtlasMapPage() {
         .stateProfile(selectedState)
         .then((res) => setStateProfile(res.data))
         .catch(() => setStateProfile(null));
+
+      const prof = getStateCulturalProfile(selectedState);
+      if (prof) {
+        setCurrentCulturalProfile(prof);
+      }
     } else {
       setStateProfile(null);
+      setCurrentCulturalProfile(null);
     }
   }, [selectedState]);
+
+  const handleSelectState = (stateName: string) => {
+    if (!stateName || stateName === "ALL") {
+      setSelectedState("ALL");
+      setStateModalOpen(false);
+      setCurrentCulturalProfile(null);
+    } else {
+      setSelectedState(stateName);
+      const prof = getStateCulturalProfile(stateName);
+      if (prof) {
+        setCurrentCulturalProfile(prof);
+        setStateModalOpen(true);
+      }
+    }
+  };
+
+  const handleCloseModal = () => {
+    setStateModalOpen(false);
+    setSelectedState("ALL");
+  };
 
   // Client-side filtering of heritage traditions
   const filteredHeritage = useMemo(() => {
@@ -112,7 +143,7 @@ export default function AtlasMapPage() {
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchName = h.name.toLowerCase().includes(q);
+        const matchName = h.name?.toLowerCase().includes(q);
         const matchRegion = h.region?.toLowerCase().includes(q);
         const matchDistrict = h.district?.toLowerCase().includes(q);
         const matchState = h.state?.toLowerCase().includes(q);
@@ -200,11 +231,11 @@ export default function AtlasMapPage() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#FAF6EE] text-[#2A2421] flex flex-col font-sans">
       <Navbar />
 
       {/* Hero Cultural Header */}
-      <section className="relative border-b border-stone-800/80 bg-gradient-to-b from-stone-900 via-stone-950 to-stone-950 pt-8 pb-6">
+      <section className="relative border-b border-[#E5DCD0] bg-gradient-to-b from-[#F5EFE6] via-[#FAF6EE] to-[#FAF6EE] pt-8 pb-6">
         <div className="shell space-y-5">
           {/* Breadcrumb / Heritage Trail */}
           <HeritageTrail />
@@ -212,17 +243,17 @@ export default function AtlasMapPage() {
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
             <div className="space-y-2 max-w-2xl">
               <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" />
+                <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#FEF3C7] text-[#92400E] border border-[#D97706]/30 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#D97706]" />
                   <span>Dharohar Cultural Atlas</span>
                 </span>
-                <span className="text-xs text-stone-500">•</span>
-                <span className="text-xs text-stone-400">15 Living Domains & Verified Events</span>
+                <span className="text-xs text-[#8C7D73]">•</span>
+                <span className="text-xs text-[#5C524C]">15 Living Domains & Verified Events</span>
               </div>
-              <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-extrabold text-stone-50 tracking-tight leading-tight">
+              <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#2A2421] tracking-tight leading-tight">
                 India's Living Cultural Universe
               </h1>
-              <p className="text-sm sm:text-base text-stone-400 leading-relaxed">
+              <p className="text-sm sm:text-base text-[#5C524C] leading-relaxed">
                 Connect directly to what India looks like, tastes like, sings, weaves, builds, and celebrates across places, living practitioners, and proof.
               </p>
             </div>
@@ -230,35 +261,35 @@ export default function AtlasMapPage() {
             {/* Quick Metrics & View Mode Switcher */}
             <div className="flex flex-wrap items-center gap-3">
               {/* View Switcher Tabs */}
-              <div className="flex items-center p-1 bg-stone-900 rounded-2xl border border-stone-800 shadow-inner">
+              <div className="flex items-center p-1 bg-[#EBE2D5] rounded-2xl border border-[#DDD3C4] shadow-2xs">
                 <button
                   onClick={() => setViewMode("map")}
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                     viewMode === "map"
-                      ? "bg-amber-600 text-stone-950 shadow-md"
-                      : "text-stone-400 hover:text-stone-200"
+                      ? "bg-[#2A2421] text-white shadow-xs"
+                      : "text-[#5C524C] hover:text-[#2A2421]"
                   }`}
                 >
-                  <Compass className="w-3.5 h-3.5" />
+                  <Compass className="w-3.5 h-3.5 text-amber-500" />
                   <span>Map Atlas</span>
                 </button>
                 <button
                   onClick={() => setViewMode("gallery")}
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                     viewMode === "gallery"
-                      ? "bg-amber-600 text-stone-950 shadow-md"
-                      : "text-stone-400 hover:text-stone-200"
+                      ? "bg-[#2A2421] text-white shadow-xs"
+                      : "text-[#5C524C] hover:text-[#2A2421]"
                   }`}
                 >
-                  <Layers className="w-3.5 h-3.5" />
+                  <Layers className="w-3.5 h-3.5 text-amber-500" />
                   <span>Traditions ({filteredHeritage.length})</span>
                 </button>
                 <button
                   onClick={() => setViewMode("events")}
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                     viewMode === "events"
-                      ? "bg-rose-600 text-white shadow-md"
-                      : "text-stone-400 hover:text-rose-300"
+                      ? "bg-[#C2410C] text-white shadow-xs"
+                      : "text-[#5C524C] hover:text-[#C2410C]"
                   }`}
                 >
                   <Flame className="w-3.5 h-3.5" />
@@ -269,9 +300,9 @@ export default function AtlasMapPage() {
               {/* Around Me Shortcut Button */}
               <Link
                 href="/around-me"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold bg-white hover:bg-[#F3EBDD] text-[#B45309] border border-[#D8CBBF] shadow-2xs transition-colors"
               >
-                <MapPin className="w-4 h-4 text-amber-400" />
+                <MapPin className="w-4 h-4 text-[#B45309]" />
                 <span>Heritage Around Me</span>
               </Link>
             </div>
@@ -281,54 +312,33 @@ export default function AtlasMapPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-2">
             {/* Search Input */}
             <div className="relative w-full md:w-80">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[#8C7D73] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search tradition, fort, food, city..."
-                className="w-full pl-10 pr-4 py-2 rounded-2xl bg-stone-900 border border-stone-800 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500/60"
+                className="w-full pl-10 pr-4 py-2 rounded-2xl bg-white border border-[#E5DCD0] text-xs text-[#2A2421] placeholder-[#8C7D73] focus:outline-none focus:border-[#B45309]"
               />
             </div>
 
             {/* Zone Selector */}
             <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto no-scrollbar text-xs">
-              <span className="text-stone-500 text-[11px] font-semibold uppercase shrink-0 mr-1">Zone:</span>
+              <span className="text-[#8C7D73] text-[11px] font-semibold uppercase shrink-0 mr-1">Zone:</span>
               {REGIONAL_ZONES.map((zone) => (
                 <button
                   key={zone}
                   onClick={() => setSelectedZone(zone)}
                   className={`shrink-0 px-2.5 py-1 rounded-xl text-xs font-medium transition ${
                     selectedZone === zone
-                      ? "bg-stone-100 text-stone-950 font-bold"
-                      : "bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800"
+                      ? "bg-[#2A2421] text-white font-bold"
+                      : "bg-white text-[#5C524C] hover:text-[#2A2421] border border-[#E5DCD0] hover:bg-[#F3EBDD]"
                   }`}
                 >
                   {zone}
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* 15 Cultural Domain Pill Bar */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar pt-1">
-            {CULTURAL_DOMAINS.map((dom) => {
-              const isActive = selectedCategory.toLowerCase() === dom.id.toLowerCase();
-              return (
-                <button
-                  key={dom.id}
-                  onClick={() => setSelectedCategory(dom.id)}
-                  className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    isActive
-                      ? "bg-amber-600 text-stone-950 shadow-md font-bold"
-                      : "bg-stone-900 hover:bg-stone-800/80 text-stone-300 border border-stone-800"
-                  }`}
-                >
-                  <span>{dom.icon}</span>
-                  <span>{dom.label}</span>
-                </button>
-              );
-            })}
           </div>
         </div>
       </section>
@@ -342,21 +352,21 @@ export default function AtlasMapPage() {
             <IndiaMap
               heritage={filteredHeritage}
               events={filteredEvents}
-              height="620px"
+              height="640px"
               selectedState={selectedState}
               activeId={activeHeritageId}
               onSelectHeritage={handleSelectHeritage}
-              onSelectState={setSelectedState}
+              onSelectState={handleSelectState}
               onSelectEvent={handleShareEvent}
             />
 
             {/* Quick Traditions Carousel Under Map */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-serif text-lg sm:text-xl font-bold text-stone-100">
+                <h3 className="font-serif text-lg sm:text-xl font-bold text-[#2A2421]">
                   {selectedState !== "ALL" ? `${selectedState} Traditions` : "Highlighted Traditions Across India"}
                 </h3>
-                <span className="text-xs text-stone-400">
+                <span className="text-xs text-[#786B63]">
                   Showing {filteredHeritage.length} traditions
                 </span>
               </div>
@@ -377,14 +387,14 @@ export default function AtlasMapPage() {
         {/* VIEW 2: TRADITIONS GALLERY */}
         {viewMode === "gallery" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between text-xs text-stone-400 pb-2 border-b border-stone-800">
+            <div className="flex items-center justify-between text-xs text-[#786B63] pb-2 border-b border-[#E5DCD0]">
               <span>Displaying {filteredHeritage.length} verified living traditions</span>
               <button
                 onClick={() => setShowAtRiskOnly(!showAtRiskOnly)}
                 className={`px-3 py-1 rounded-xl text-xs font-semibold border transition ${
                   showAtRiskOnly
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                    : "bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200"
+                    ? "bg-[#FEF3C7] text-[#92400E] border-[#D97706]/40"
+                    : "bg-white text-[#5C524C] border-[#E5DCD0] hover:text-[#2A2421]"
                 }`}
               >
                 {showAtRiskOnly ? "✓ Showing Preservation Watch Only" : "Filter: Preservation Watch"}
@@ -393,9 +403,9 @@ export default function AtlasMapPage() {
 
             {filteredHeritage.length === 0 ? (
               <div className="py-20 text-center space-y-3">
-                <Compass className="w-10 h-10 mx-auto text-stone-600" />
-                <h3 className="font-serif text-xl font-bold text-stone-300">No traditions match your filters</h3>
-                <p className="text-xs text-stone-500">Try selecting "All India" or clearing your search term.</p>
+                <Compass className="w-10 h-10 mx-auto text-[#8C7D73]" />
+                <h3 className="font-serif text-xl font-bold text-[#2A2421]">No traditions match your filters</h3>
+                <p className="text-xs text-[#786B63]">Try selecting "All India" or clearing your search term.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -415,16 +425,16 @@ export default function AtlasMapPage() {
         {viewMode === "events" && (
           <div className="space-y-6">
             {/* Live Events Filter Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-stone-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#E5DCD0]">
               <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-rose-500 fill-rose-500/30" />
-                <h2 className="font-serif text-xl font-bold text-stone-100">
+                <Flame className="w-5 h-5 text-[#C2410C] fill-[#C2410C]/30" />
+                <h2 className="font-serif text-xl font-bold text-[#2A2421]">
                   What's Happening in India?
                 </h2>
               </div>
 
               {/* Time Filters */}
-              <div className="flex items-center gap-1.5 p-1 bg-stone-900 rounded-2xl border border-stone-800 text-xs">
+              <div className="flex items-center gap-1.5 p-1 bg-[#EBE2D5] rounded-2xl border border-[#DDD3C4] text-xs">
                 {[
                   { id: "all", label: "All Events" },
                   { id: "live_now", label: "🔴 Live Now" },
@@ -436,8 +446,8 @@ export default function AtlasMapPage() {
                     onClick={() => setEventTimeFilter(tf.id)}
                     className={`px-3 py-1.5 rounded-xl font-semibold transition ${
                       eventTimeFilter === tf.id
-                        ? "bg-rose-600 text-white shadow-sm"
-                        : "text-stone-400 hover:text-stone-200"
+                        ? "bg-[#C2410C] text-white shadow-xs"
+                        : "text-[#5C524C] hover:text-[#2A2421]"
                     }`}
                   >
                     {tf.label}
@@ -449,9 +459,9 @@ export default function AtlasMapPage() {
             {/* Events Grid */}
             {filteredEvents.length === 0 ? (
               <div className="py-20 text-center space-y-3">
-                <Calendar className="w-10 h-10 mx-auto text-stone-600" />
-                <h3 className="font-serif text-xl font-bold text-stone-300">No events found</h3>
-                <p className="text-xs text-stone-500">Try changing the time filter or search query.</p>
+                <Calendar className="w-10 h-10 mx-auto text-[#8C7D73]" />
+                <h3 className="font-serif text-xl font-bold text-[#2A2421]">No events found</h3>
+                <p className="text-xs text-[#786B63]">Try changing the time filter or search query.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -481,6 +491,13 @@ export default function AtlasMapPage() {
           onClearState={() => setSelectedState("ALL")}
         />
       )}
+
+      {/* Interactive Cultural Drawer / Detail Overlay */}
+      <StateCulturalModal
+        isOpen={stateModalOpen}
+        profile={currentCulturalProfile}
+        onClose={handleCloseModal}
+      />
 
       {/* Social Poster Share Generator Modal */}
       <SocialShareModal

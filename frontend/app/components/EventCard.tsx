@@ -13,7 +13,6 @@ import {
   Building2, 
   ExternalLink 
 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
 
 export interface CulturalEventData {
   id: number;
@@ -95,7 +94,7 @@ export default function EventCard({ event, onShare, compact = false }: EventCard
     );
   };
 
-  const calendarDownloadUrl = `${API_BASE_URL}/api/events/${event.event_id}/calendar.ics`;
+  const calendarDownloadUrl = `http://localhost:8000/api/events/${event.event_id}/calendar.ics`;
   const directionsLink = event.directions_url || `https://www.google.com/maps/dir/?api=1&destination=${event.lat},${event.lon}`;
 
   return (

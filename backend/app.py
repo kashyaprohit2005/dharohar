@@ -22,14 +22,6 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from heritage_data import RICH_HERITAGE_RECORDS
 from event_data import get_seed_cultural_events
-from haryana_geo_data import (
-    INDIA_STATES_REGISTRY,
-    HARYANA_DISTRICTS_REGISTRY,
-    HARYANA_LOCALITIES_DATA,
-    HARYANA_LOCATIONS_DATA,
-    HARYANA_CULTURAL_ITEMS_DATA,
-    HARYANA_CULTURAL_STORIES_DATA
-)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # DATABASE SETUP
@@ -381,6 +373,8 @@ class CulturalEvent(Base):
     linked_heritage_id  = Column(Integer, ForeignKey("heritage.id"), nullable=True)
     created_at          = Column(DateTime, default=datetime.utcnow)
 
+    linked_heritage     = relationship("Heritage")
+
 class UserFavorite(Base):
     """User bookmarked heritage traditions, live events, or artisan practitioners."""
     __tablename__ = "user_favorites"
@@ -390,114 +384,132 @@ class UserFavorite(Base):
     entity_id       = Column(String, index=True)
     created_at      = Column(DateTime, default=datetime.utcnow)
 
-class GeoState(Base):
-    __tablename__ = "geo_states"
-    id           = Column(Integer, primary_key=True, index=True)
-    code         = Column(String, unique=True, index=True)  # e.g. "IN-HR", "IN-RJ"
-    name         = Column(String, index=True)
-    zone         = Column(String)                           # "North", "South", etc.
-    center_lat   = Column(Float)
-    center_lon   = Column(Float)
-    zoom_level   = Column(Integer, default=7)
-    tagline      = Column(String)
-    is_demo_deep = Column(Boolean, default=False)
-
-class GeoDistrict(Base):
-    __tablename__ = "geo_districts"
-    id            = Column(Integer, primary_key=True, index=True)
-    slug          = Column(String, unique=True, index=True) # e.g. "hr-panipat", "hr-hansi"
-    state_code    = Column(String, ForeignKey("geo_states.code"), index=True)
-    name          = Column(String, index=True)
-    headquarters  = Column(String)
-    center_lat    = Column(Float)
-    center_lon    = Column(Float)
-    zoom_level    = Column(Integer, default=10)
-    odop_product  = Column(String, nullable=True)
-    odop_category = Column(String, nullable=True)
-    odop_source   = Column(String, nullable=True)
-    odop_status   = Column(String, default="PENDING_SOURCE") # VERIFIED, PENDING_SOURCE, NOT_AVAILABLE
-    cultural_intro= Column(Text)
-    tourism_url   = Column(String, nullable=True)
-
-class GeoLocality(Base):
-    __tablename__ = "geo_localities"
-    id           = Column(Integer, primary_key=True, index=True)
-    slug         = Column(String, unique=True, index=True)
-    district_slug= Column(String, ForeignKey("geo_districts.slug"), index=True)
-    name         = Column(String)
-    locality_type= Column(String)  # "TEHSIL", "BLOCK", "TOWN", "VILLAGE"
-    center_lat   = Column(Float)
-    center_lon   = Column(Float)
-
-class GeoLocation(Base):
-    """GeoPoint: Physical site or cultural precinct supporting multiple cultural items."""
-    __tablename__ = "geo_locations"
-    id           = Column(Integer, primary_key=True, index=True)
-    slug         = Column(String, unique=True, index=True)
-    district_slug= Column(String, ForeignKey("geo_districts.slug"), index=True)
-    locality_slug= Column(String, nullable=True)
-    name         = Column(String)
-    location_type= Column(String)  # "MONUMENT", "CRAFT_CLUSTER", "TOWN_CENTRE", etc.
-    lat          = Column(Float)
-    lon          = Column(Float)
-    address      = Column(String, default="")
-
-class UniversalCulturalItem(Base):
-    __tablename__ = "universal_cultural_items"
-    id                 = Column(Integer, primary_key=True, index=True)
-    slug               = Column(String, unique=True, index=True)
-    title              = Column(String, index=True)
-    category           = Column(String, index=True)  # CRAFTS, FOOD, MONUMENTS, etc.
-    district_slug      = Column(String, ForeignKey("geo_districts.slug"), index=True)
-    location_slug      = Column(String, ForeignKey("geo_locations.slug"), nullable=True)
-    short_description  = Column(Text)
-    detailed_overview  = Column(Text)
-    image_url          = Column(String, nullable=True)
-    image_caption      = Column(String, default="")
-    image_source       = Column(String, default="")
-    audio_type         = Column(String, default="AI_NARRATION") # "RECORDED_STORY" or "AI_NARRATION"
-    audio_url          = Column(String, nullable=True)
-    audio_script       = Column(Text, nullable=True)
-    verification_tier  = Column(String, default="OFFICIAL_VERIFIED") # OFFICIAL_VERIFIED, SOURCE_BACKED, COMMUNITY_PENDING
-    story_slug         = Column(String, nullable=True)
-
-    sources  = relationship("CulturalItemSource", back_populates="item", cascade="all, delete-orphan")
-    location = relationship("GeoLocation", foreign_keys=[location_slug], primaryjoin="UniversalCulturalItem.location_slug == GeoLocation.slug")
-
-class CulturalItemSource(Base):
-    __tablename__ = "cultural_item_sources"
-    id                  = Column(Integer, primary_key=True, index=True)
-    item_id             = Column(Integer, ForeignKey("universal_cultural_items.id"), index=True)
-    source_name         = Column(String)
-    source_url          = Column(String, nullable=True)
-    source_tier         = Column(String)  # TIER_1_GOVERNMENT, TIER_2_INSTITUTION, etc.
-    publisher           = Column(String, default="")
-    publication_date    = Column(String, default="")
-    last_checked        = Column(String, default="")
-    verification_status = Column(String, default="VERIFIED")
-    evidence_level      = Column(String, default="HIGH")
-    citation_excerpt    = Column(Text, default="")
-
-    item = relationship("UniversalCulturalItem", back_populates="sources")
-
-class CulturalStory(Base):
-    __tablename__ = "cultural_stories"
-    id           = Column(Integer, primary_key=True, index=True)
-    slug         = Column(String, unique=True, index=True)
-    title        = Column(String)
-    subtitle     = Column(String)
-    hero_image   = Column(String, nullable=True)
-    chapters_json= Column(Text)
-    audio_type   = Column(String, default="AI_NARRATION")
-    audio_script = Column(Text, nullable=True)
-    sources_json = Column(Text, default="[]")
-
 # Create tables
+
+class GeoEntity(Base):
+    """Hierarchical geographic registry: State -> District -> Subdivision -> Tehsil -> SubTehsil -> Block -> Town -> Village -> Locality."""
+    __tablename__ = "geo_entities"
+    id                  = Column(Integer, primary_key=True, index=True)
+    slug                = Column(String, unique=True, index=True)
+    name                = Column(String, index=True)
+    entity_type         = Column(String, index=True)  # state, district, subdivision, tehsil, sub_tehsil, block, town, village, locality
+    parent_slug         = Column(String, index=True, nullable=True)
+    state_code          = Column(String, index=True, default="HR")
+    district_slug       = Column(String, index=True, nullable=True)
+    lat                 = Column(Float, nullable=True)
+    lon                 = Column(Float, nullable=True)
+    description         = Column(Text, default="")
+    has_cultural_record = Column(Boolean, default=False)
+    cultural_status     = Column(String, default="GEOGRAPHIC_RECORD_ONLY") # VERIFIED, UNDER_REVIEW, GEOGRAPHIC_RECORD_ONLY
+    status_notice       = Column(String, default="Geographic record available. Cultural documentation not yet verified.")
+    created_at          = Column(DateTime, default=datetime.utcnow)
+
 Base.metadata.create_all(bind=engine)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # LIVING HERITAGE & EVENTS SEEDING
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def seed_geo_data():
+    """Seeds Haryana administrative districts, sub-districts, authentic villages registry, cultural records, and events."""
+    try:
+        from geo_data import HARYANA_DISTRICTS, HARYANA_VILLAGES_REGISTRY, HARYANA_CULTURAL_RECORDS, HARYANA_EVENTS_DATA
+    except ImportError:
+        return
+    with SessionLocal() as db:
+        for d in HARYANA_DISTRICTS:
+            if not db.query(GeoEntity).filter(GeoEntity.slug == d["slug"]).first():
+                db.add(GeoEntity(
+                    slug=d["slug"],
+                    name=d["name"],
+                    entity_type="district",
+                    parent_slug="haryana",
+                    state_code="HR",
+                    district_slug=d["slug"],
+                    lat=d["lat"],
+                    lon=d["lon"],
+                    description=d["description"],
+                    has_cultural_record=True,
+                    cultural_status="VERIFIED",
+                    status_notice="Documented: Administrative District with cultural traditions."
+                ))
+            for sub in d.get("subdivisions", []):
+                sub_slug = f"{d['slug']}-{sub.lower().replace(' ', '-')}"
+                if not db.query(GeoEntity).filter(GeoEntity.slug == sub_slug).first():
+                    db.add(GeoEntity(
+                        slug=sub_slug,
+                        name=sub,
+                        entity_type="subdivision",
+                        parent_slug=d["slug"],
+                        state_code="HR",
+                        district_slug=d["slug"],
+                        lat=d["lat"],
+                        lon=d["lon"],
+                        description=f"Subdivision of {d['name']} district.",
+                        has_cultural_record=True,
+                        cultural_status="VERIFIED",
+                        status_notice="Documented administrative subdivision."
+                    ))
+            for teh in d.get("tehsils", []):
+                teh_slug = f"{d['slug']}-{teh.lower().replace(' ', '-')}-tehsil"
+                if not db.query(GeoEntity).filter(GeoEntity.slug == teh_slug).first():
+                    db.add(GeoEntity(
+                        slug=teh_slug,
+                        name=teh,
+                        entity_type="tehsil",
+                        parent_slug=d["slug"],
+                        state_code="HR",
+                        district_slug=d["slug"],
+                        lat=d["lat"],
+                        lon=d["lon"],
+                        description=f"Tehsil in {d['name']} district.",
+                        has_cultural_record=True,
+                        cultural_status="VERIFIED",
+                        status_notice="Documented revenue tehsil."
+                    ))
+
+        for v in HARYANA_VILLAGES_REGISTRY:
+            if not db.query(GeoEntity).filter(GeoEntity.slug == v["slug"]).first():
+                db.add(GeoEntity(
+                    slug=v["slug"],
+                    name=v["name"],
+                    entity_type=v.get("entity_type", "village"),
+                    parent_slug=v.get("parent_slug"),
+                    state_code=v.get("state_code", "HR"),
+                    district_slug=v.get("district_slug"),
+                    lat=v.get("lat"),
+                    lon=v.get("lon"),
+                    description=v.get("description", ""),
+                    has_cultural_record=v.get("has_cultural_record", False),
+                    cultural_status=v.get("cultural_status", "GEOGRAPHIC_RECORD_ONLY"),
+                    status_notice=v.get("status_notice", "Geographic record available. Cultural documentation not yet verified.")
+                ))
+
+        for item in HARYANA_CULTURAL_RECORDS:
+            existing_h = db.query(Heritage).filter(Heritage.name == item["name"]).first()
+            if not existing_h:
+                item_data = dict(item)
+                evidence_items = item_data.pop("evidence", [])
+                h_obj = Heritage(**item_data)
+                db.add(h_obj)
+                db.flush()
+                for ev in evidence_items:
+                    ev_obj = HeritageEvidence(heritage_id=h_obj.id, **ev)
+                    db.add(ev_obj)
+
+        for ev in HARYANA_EVENTS_DATA:
+            existing_ev = db.query(CulturalEvent).filter(CulturalEvent.event_id == ev["event_id"]).first()
+            if not existing_ev:
+                ev_data = dict(ev)
+                lh_name = ev_data.pop("linked_heritage_name", None)
+                lh_id = None
+                if lh_name:
+                    lh_match = db.query(Heritage).filter(Heritage.name.ilike(f"%{lh_name}%")).first()
+                    if lh_match:
+                        lh_id = lh_match.id
+                db.add(CulturalEvent(linked_heritage_id=lh_id, **ev_data))
+
+        db.commit()
 
 def seed_heritage_data():
     """Seeds only real sourced living heritage registry and verified live events across India. ZERO artisan records."""
@@ -541,47 +553,7 @@ def seed_heritage_data():
             db.commit()
 
 seed_heritage_data()
-
-def seed_geo_cultural_data():
-    """Seeds authoritative geographic and cultural knowledge layers for Dharohar incrementally by unique code/slug."""
-    with SessionLocal() as db:
-        for s in INDIA_STATES_REGISTRY:
-            if not db.query(GeoState).filter(GeoState.code == s["code"]).first():
-                db.add(GeoState(**s))
-        db.commit()
-
-        for d in HARYANA_DISTRICTS_REGISTRY:
-            if not db.query(GeoDistrict).filter(GeoDistrict.slug == d["slug"]).first():
-                db.add(GeoDistrict(**d))
-        db.commit()
-
-        for loc in HARYANA_LOCALITIES_DATA:
-            if not db.query(GeoLocality).filter(GeoLocality.slug == loc["slug"]).first():
-                db.add(GeoLocality(**loc))
-        db.commit()
-
-        for g in HARYANA_LOCATIONS_DATA:
-            if not db.query(GeoLocation).filter(GeoLocation.slug == g["slug"]).first():
-                db.add(GeoLocation(**g))
-        db.commit()
-
-        for item in HARYANA_CULTURAL_ITEMS_DATA:
-            if not db.query(UniversalCulturalItem).filter(UniversalCulturalItem.slug == item["slug"]).first():
-                item_copy = dict(item)
-                sources_data = item_copy.pop("sources", [])
-                c_item = UniversalCulturalItem(**item_copy)
-                db.add(c_item)
-                db.flush()
-                for src in sources_data:
-                    db.add(CulturalItemSource(item_id=c_item.id, **src))
-        db.commit()
-
-        for st in HARYANA_CULTURAL_STORIES_DATA:
-            if not db.query(CulturalStory).filter(CulturalStory.slug == st["slug"]).first():
-                db.add(CulturalStory(**st))
-        db.commit()
-
-seed_geo_cultural_data()
+seed_geo_data()
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # FASTAPI APP & MIDDLEWARE
@@ -593,36 +565,9 @@ app = FastAPI(
     version="5.0.0"
 )
 
-# Production-safe environment-driven CORS configuration
-frontend_env = os.getenv("FRONTEND_URL", "")
-allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
-
-cors_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
-if frontend_env:
-    for u in frontend_env.split(","):
-        clean_u = u.strip().rstrip("/")
-        if clean_u:
-            cors_origins.append(clean_u)
-            cors_origins.append(clean_u + "/")
-if allowed_origins_env:
-    for u in allowed_origins_env.split(","):
-        clean_u = u.strip().rstrip("/")
-        if clean_u:
-            cors_origins.append(clean_u)
-            cors_origins.append(clean_u + "/")
-
-# Deduplicate
-cors_origins = list(dict.fromkeys(cors_origins))
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\.onrender\.com",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -908,655 +853,6 @@ class FavoriteToggleInput(BaseModel):
     user_identifier: str
     entity_type: str  # heritage, event, practitioner
     entity_id: str
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 0. GEOGRAPHIC ATLAS & MULTI-TIER CULTURAL LAYER ENDPOINTS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-@app.get("/api/geo/states")
-def get_geo_states(db=Depends(get_db)):
-    """Returns configured State/UT registry (28 States + 8 UTs = 36 entities)."""
-    states = db.query(GeoState).order_by(GeoState.name).all()
-    return [
-        {
-            "code": s.code,
-            "name": s.name,
-            "zone": s.zone,
-            "center": [s.center_lat, s.center_lon],
-            "zoom": s.zoom_level,
-            "tagline": s.tagline,
-            "is_demo_deep": s.is_demo_deep
-        }
-        for s in states
-    ]
-
-@app.get("/api/geo/states/{state_code}/districts")
-def get_state_districts(state_code: str, db=Depends(get_db)):
-    """Returns dynamic database-driven district registry for a state (e.g. IN-HR)."""
-    code_upper = state_code.upper()
-    districts = db.query(GeoDistrict).filter(
-        or_(GeoDistrict.state_code == code_upper, GeoDistrict.state_code.ilike(f"%{state_code}%"))
-    ).order_by(GeoDistrict.name).all()
-    
-    result = []
-    for d in districts:
-        items_count = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.district_slug == d.slug).count()
-        result.append({
-            "slug": d.slug,
-            "name": d.name,
-            "headquarters": d.headquarters,
-            "state_code": d.state_code,
-            "center": [d.center_lat, d.center_lon],
-            "zoom": d.zoom_level,
-            "odop_product": d.odop_product,
-            "odop_category": d.odop_category,
-            "odop_source": d.odop_source,
-            "odop_status": d.odop_status,
-            "cultural_intro": d.cultural_intro,
-            "tourism_url": d.tourism_url,
-            "items_count": items_count
-        })
-    return result
-
-@app.get("/api/geo/districts/{district_slug}")
-def get_district_detail(district_slug: str, db=Depends(get_db)):
-    """Returns comprehensive district dossier with ODOP status, cultural strengths, and categorized counts."""
-    d = db.query(GeoDistrict).filter(
-        or_(GeoDistrict.slug == district_slug.lower(), GeoDistrict.name.ilike(district_slug.strip()))
-    ).first()
-    if not d:
-        raise HTTPException(status_code=404, detail=f"District '{district_slug}' not found.")
-
-    items = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.district_slug == d.slug).all()
-    
-    categories_breakdown = {}
-    for item in items:
-        cat = item.category.upper()
-        categories_breakdown[cat] = categories_breakdown.get(cat, 0) + 1
-
-    localities = db.query(GeoLocality).filter(GeoLocality.district_slug == d.slug).all()
-    locations = db.query(GeoLocation).filter(GeoLocation.district_slug == d.slug).all()
-
-    return {
-        "slug": d.slug,
-        "name": d.name,
-        "headquarters": d.headquarters,
-        "state_code": d.state_code,
-        "center": [d.center_lat, d.center_lon],
-        "zoom": d.zoom_level,
-        "odop": {
-            "product": d.odop_product,
-            "category": d.odop_category,
-            "source": d.odop_source,
-            "status": d.odop_status
-        },
-        "cultural_intro": d.cultural_intro,
-        "tourism_url": d.tourism_url,
-        "total_items": len(items),
-        "categories_breakdown": categories_breakdown,
-        "localities": [{"slug": loc.slug, "name": loc.name, "type": loc.locality_type, "center": [loc.center_lat, loc.center_lon]} for loc in localities],
-        "locations": [{"slug": l.slug, "name": l.name, "type": l.location_type, "lat": l.lat, "lon": l.lon, "address": l.address} for l in locations]
-    }
-
-@app.get("/api/geo/districts/{district_slug}/localities")
-def get_district_localities(district_slug: str, db=Depends(get_db)):
-    """Returns administrative subdivisions (tehsils, blocks, villages) for a district with counts of mapped locations and verified/candidate items."""
-    d = db.query(GeoDistrict).filter(
-        or_(GeoDistrict.slug == district_slug.lower(), GeoDistrict.name.ilike(district_slug.strip()))
-    ).first()
-    if not d:
-        raise HTTPException(status_code=404, detail=f"District '{district_slug}' not found.")
-
-    localities = db.query(GeoLocality).filter(GeoLocality.district_slug == d.slug).all()
-    results = []
-    for loc in localities:
-        loc_locations = db.query(GeoLocation).filter(GeoLocation.locality_slug == loc.slug).all()
-        loc_slugs = [l.slug for l in loc_locations]
-        items = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.location_slug.in_(loc_slugs)).all() if loc_slugs else []
-        verified_count = sum(1 for it in items if it.verification_tier == "OFFICIAL_VERIFIED")
-        candidate_count = sum(1 for it in items if it.verification_tier in ("SOURCE_AVAILABLE", "SOURCE_BACKED", "COMMUNITY_PENDING"))
-
-        results.append({
-            "slug": loc.slug,
-            "district_slug": loc.district_slug,
-            "name": loc.name,
-            "locality_type": loc.locality_type,
-            "center": [loc.center_lat, loc.center_lon],
-            "locations_count": len(loc_locations),
-            "cultural_items_count": len(items),
-            "verified_count": verified_count,
-            "candidate_count": candidate_count,
-            "documentation_status": "DOCUMENTED" if len(items) > 0 else "DOCUMENTATION_IN_PROGRESS",
-            "locations": [{"slug": l.slug, "name": l.name, "type": l.location_type, "lat": l.lat, "lon": l.lon} for l in loc_locations]
-        })
-    return results
-
-@app.get("/api/geo/localities/{locality_slug}")
-def get_locality_detail(locality_slug: str, db=Depends(get_db)):
-    """Returns details of a specific tehsil, block, or village locality."""
-    loc = db.query(GeoLocality).filter(GeoLocality.slug == locality_slug.lower()).first()
-    if not loc:
-        raise HTTPException(status_code=404, detail=f"Locality '{locality_slug}' not found.")
-    
-    district = db.query(GeoDistrict).filter(GeoDistrict.slug == loc.district_slug).first()
-    loc_locations = db.query(GeoLocation).filter(GeoLocation.locality_slug == loc.slug).all()
-    loc_slugs = [l.slug for l in loc_locations]
-    items = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.location_slug.in_(loc_slugs)).all() if loc_slugs else []
-
-    return {
-        "slug": loc.slug,
-        "name": loc.name,
-        "locality_type": loc.locality_type,
-        "district_slug": loc.district_slug,
-        "district_name": district.name if district else loc.district_slug,
-        "center": [loc.center_lat, loc.center_lon],
-        "locations_count": len(loc_locations),
-        "cultural_items_count": len(items),
-        "documentation_status": "DOCUMENTED" if len(items) > 0 else "DOCUMENTATION_IN_PROGRESS",
-        "locations": [{"slug": l.slug, "name": l.name, "type": l.location_type, "lat": l.lat, "lon": l.lon, "address": l.address} for l in loc_locations]
-    }
-
-@app.get("/api/geo/localities/{locality_slug}/items")
-def get_locality_items(locality_slug: str, db=Depends(get_db)):
-    """Returns cultural items situated within this tehsil, block, or village."""
-    loc = db.query(GeoLocality).filter(GeoLocality.slug == locality_slug.lower()).first()
-    if not loc:
-        raise HTTPException(status_code=404, detail=f"Locality '{locality_slug}' not found.")
-    
-    loc_locations = db.query(GeoLocation).filter(GeoLocation.locality_slug == loc.slug).all()
-    loc_slugs = [l.slug for l in loc_locations]
-    if not loc_slugs:
-        return []
-
-    items = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.location_slug.in_(loc_slugs)).all()
-    results = []
-    for it in items:
-        sources = [
-            {
-                "name": s.source_name,
-                "url": s.source_url,
-                "tier": s.source_tier,
-                "publisher": s.publisher,
-                "date": s.publication_date,
-                "verification_status": s.verification_status,
-                "evidence_level": s.evidence_level,
-                "citation": s.citation_excerpt
-            }
-            for s in it.sources
-        ]
-        loc_obj = it.location
-        results.append({
-            "id": it.id,
-            "slug": it.slug,
-            "title": it.title,
-            "category": it.category,
-            "district_slug": it.district_slug,
-            "locality_slug": loc.slug,
-            "location_slug": it.location_slug,
-            "location_name": loc_obj.name if loc_obj else None,
-            "lat": loc_obj.lat if loc_obj else None,
-            "lon": loc_obj.lon if loc_obj else None,
-            "address": loc_obj.address if loc_obj else None,
-            "short_description": it.short_description,
-            "detailed_overview": it.detailed_overview,
-            "image_url": it.image_url,
-            "image_caption": it.image_caption,
-            "image_source": it.image_source,
-            "audio_type": it.audio_type,
-            "audio_url": it.audio_url,
-            "audio_script": it.audio_script,
-            "verification_tier": it.verification_tier,
-            "story_slug": it.story_slug,
-            "sources": sources
-        })
-    return results
-
-@app.get("/api/geo/districts/{district_slug}/items")
-def get_district_items(district_slug: str, category: Optional[str] = None, db=Depends(get_db)):
-    """Returns cultural items within a district, optionally filtered by category."""
-    query = db.query(UniversalCulturalItem).filter(
-        or_(UniversalCulturalItem.district_slug == district_slug.lower(), UniversalCulturalItem.district_slug.ilike(f"%{district_slug}%"))
-    )
-    if category and category.upper() != "ALL":
-        query = query.filter(UniversalCulturalItem.category.ilike(f"%{category}%"))
-
-    items = query.all()
-    results = []
-    for it in items:
-        sources = [
-            {
-                "name": s.source_name,
-                "url": s.source_url,
-                "tier": s.source_tier,
-                "publisher": s.publisher,
-                "date": s.publication_date,
-                "verification_status": s.verification_status,
-                "evidence_level": s.evidence_level,
-                "citation": s.citation_excerpt
-            }
-            for s in it.sources
-        ]
-        loc = it.location
-        results.append({
-            "id": it.id,
-            "slug": it.slug,
-            "title": it.title,
-            "category": it.category,
-            "district_slug": it.district_slug,
-            "location_slug": it.location_slug,
-            "location_name": loc.name if loc else None,
-            "lat": loc.lat if loc else None,
-            "lon": loc.lon if loc else None,
-            "address": loc.address if loc else None,
-            "short_description": it.short_description,
-            "detailed_overview": it.detailed_overview,
-            "image_url": it.image_url,
-            "image_caption": it.image_caption,
-            "image_source": it.image_source,
-            "audio_type": it.audio_type,
-            "audio_url": it.audio_url,
-            "audio_script": it.audio_script,
-            "verification_tier": it.verification_tier,
-            "story_slug": it.story_slug,
-            "sources": sources
-        })
-    return results
-
-@app.get("/api/geo/items/{item_slug}")
-def get_cultural_item(item_slug: str, db=Depends(get_db)):
-    """Returns single cultural item with multi-source evidence citations and GeoPoint."""
-    it = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.slug == item_slug.lower()).first()
-    if not it:
-        raise HTTPException(status_code=404, detail=f"Cultural item '{item_slug}' not found.")
-
-    sources = [
-        {
-            "name": s.source_name,
-            "url": s.source_url,
-            "tier": s.source_tier,
-            "publisher": s.publisher,
-            "date": s.publication_date,
-            "verification_status": s.verification_status,
-            "evidence_level": s.evidence_level,
-            "citation": s.citation_excerpt
-        }
-        for s in it.sources
-    ]
-    loc = it.location
-    return {
-        "id": it.id,
-        "slug": it.slug,
-        "title": it.title,
-        "category": it.category,
-        "district_slug": it.district_slug,
-        "location_slug": it.location_slug,
-        "location_name": loc.name if loc else None,
-        "lat": loc.lat if loc else None,
-        "lon": loc.lon if loc else None,
-        "address": loc.address if loc else None,
-        "short_description": it.short_description,
-        "detailed_overview": it.detailed_overview,
-        "image_url": it.image_url,
-        "image_caption": it.image_caption,
-        "image_source": it.image_source,
-        "audio_type": it.audio_type,
-        "audio_url": it.audio_url,
-        "audio_script": it.audio_script,
-        "verification_tier": it.verification_tier,
-        "story_slug": it.story_slug,
-        "sources": sources
-    }
-
-@app.get("/api/geo/items/{item_slug}/story")
-def get_cultural_story(item_slug: str, db=Depends(get_db)):
-    """Returns multi-chapter cultural story for immersive storytelling mode."""
-    story = db.query(CulturalStory).filter(CulturalStory.slug == item_slug.lower()).first()
-    if not story:
-        item = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.slug == item_slug.lower()).first()
-        if item and item.story_slug:
-            story = db.query(CulturalStory).filter(CulturalStory.slug == item.story_slug).first()
-
-    if not story:
-        raise HTTPException(status_code=404, detail=f"Cultural story for '{item_slug}' not found.")
-
-    try:
-        chapters = json.loads(story.chapters_json)
-    except:
-        chapters = []
-
-    try:
-        sources = json.loads(story.sources_json)
-    except:
-        sources = []
-
-    return {
-        "slug": story.slug,
-        "title": story.title,
-        "subtitle": story.subtitle,
-        "hero_image": story.hero_image,
-        "audio_type": story.audio_type,
-        "audio_script": story.audio_script,
-        "chapters": chapters,
-        "sources": sources
-    }
-
-@app.get("/api/geo/search")
-def search_geo_cultural(q: str = Query(..., min_length=1), db=Depends(get_db)):
-    """Grouped search matching across Places, Crafts, Food, Monuments, Traditions, Events, Stories."""
-    term = q.strip()
-    s = f"%{term}%"
-
-    places = []
-    found_districts = db.query(GeoDistrict).filter(
-        or_(GeoDistrict.name.ilike(s), GeoDistrict.headquarters.ilike(s), GeoDistrict.slug.ilike(s))
-    ).limit(6).all()
-    for d in found_districts:
-        places.append({
-            "type": "DISTRICT",
-            "name": d.name,
-            "slug": d.slug,
-            "subtitle": f"{d.headquarters}, Haryana",
-            "center": [d.center_lat, d.center_lon],
-            "zoom": d.zoom_level
-        })
-
-    found_states = db.query(GeoState).filter(
-        or_(GeoState.name.ilike(s), GeoState.code.ilike(s))
-    ).limit(3).all()
-    for st in found_states:
-        places.append({
-            "type": "STATE",
-            "name": st.name,
-            "code": st.code,
-            "subtitle": st.zone + " India",
-            "center": [st.center_lat, st.center_lon],
-            "zoom": st.zoom_level
-        })
-
-    # Search localities (tehsils, blocks, villages)
-    found_localities = db.query(GeoLocality).filter(
-        or_(GeoLocality.name.ilike(s), GeoLocality.slug.ilike(s))
-    ).limit(6).all()
-    for loc in found_localities:
-        district = db.query(GeoDistrict).filter(GeoDistrict.slug == loc.district_slug).first()
-        places.append({
-            "type": "LOCALITY",
-            "name": loc.name,
-            "slug": loc.slug,
-            "district_slug": loc.district_slug,
-            "locality_type": loc.locality_type,
-            "subtitle": f"{loc.name}, {district.name if district else 'Haryana'}",
-            "center": [loc.center_lat, loc.center_lon],
-            "zoom": 12
-        })
-
-    crafts = []
-    food = []
-    monuments = []
-    traditions = []
-    nature = []
-
-    c_items = db.query(UniversalCulturalItem).filter(
-        or_(
-            UniversalCulturalItem.title.ilike(s),
-            UniversalCulturalItem.short_description.ilike(s),
-            UniversalCulturalItem.detailed_overview.ilike(s)
-        )
-    ).limit(15).all()
-
-    for item in c_items:
-        payload = {
-            "id": item.id,
-            "slug": item.slug,
-            "title": item.title,
-            "category": item.category,
-            "district_slug": item.district_slug,
-            "verification_tier": item.verification_tier,
-            "image_url": item.image_url,
-            "story_slug": item.story_slug
-        }
-        cat = item.category.upper()
-        if cat in ("CRAFTS", "TEXTILES", "LOCAL_PRODUCTS", "CLOTHING"):
-            crafts.append(payload)
-        elif cat == "FOOD":
-            food.append(payload)
-        elif cat in ("MONUMENTS", "ARCHAEOLOGY", "ARCHITECTURE", "HISTORICAL_PLACES", "TEMPLES", "RELIGIOUS_HERITAGE"):
-            monuments.append(payload)
-        elif cat == "NATURE_RELATED_HERITAGE":
-            nature.append(payload)
-        elif cat in ("FESTIVALS", "EVENTS"):
-            # Route to events if we have the events list, otherwise traditions
-            traditions.append(payload)
-        else:
-            traditions.append(payload)
-
-    stories = []
-    found_stories = db.query(CulturalStory).filter(
-        or_(CulturalStory.title.ilike(s), CulturalStory.subtitle.ilike(s), CulturalStory.slug.ilike(s))
-    ).limit(4).all()
-    for st in found_stories:
-        stories.append({
-            "slug": st.slug,
-            "title": st.title,
-            "subtitle": st.subtitle,
-            "hero_image": st.hero_image
-        })
-
-    events = []
-    found_events = db.query(CulturalEvent).filter(
-        or_(CulturalEvent.title.ilike(s), CulturalEvent.city.ilike(s), CulturalEvent.state.ilike(s))
-    ).limit(4).all()
-    for ev in found_events:
-        events.append({
-            "id": ev.id,
-            "event_id": ev.event_id,
-            "title": ev.title,
-            "venue": ev.venue,
-            "city": ev.city,
-            "start_date": ev.start_date,
-            "category": ev.category
-        })
-
-    return {
-        "query": term,
-        "places": places,
-        "crafts": crafts,
-        "food": food,
-        "monuments": monuments,
-        "traditions": traditions,
-        "nature": nature,
-        "stories": stories,
-        "events": events
-    }
-
-@app.get("/api/geo/categories")
-def get_geo_categories():
-    """Returns dynamic taxonomy schema with icons, color tokens, and category labels."""
-    return [
-        {"id": "all", "label": "All Layers", "icon": "🌐", "color": "#f59e0b"},
-        {"id": "crafts", "label": "Crafts & Textiles", "icon": "🏺", "color": "#d97706"},
-        {"id": "food", "label": "Culinary Heritage", "icon": "🍲", "color": "#ea580c"},
-        {"id": "monuments", "label": "Monuments & Forts", "icon": "🏰", "color": "#3b82f6"},
-        {"id": "traditions", "label": "Folklore & Traditions", "icon": "📜", "color": "#8b5cf6"},
-        {"id": "events", "label": "Live Cultural Events", "icon": "🎪", "color": "#ec4899"},
-        {"id": "art", "label": "Art & Paintings", "icon": "🎨", "color": "#10b981"},
-        {"id": "people", "label": "Artisans & Practitioners", "icon": "👥", "color": "#6366f1"}
-    ]
-
-@app.get("/api/geo/geojson/india-states")
-def get_india_states_geojson():
-    """Serves clean 36 State/UT boundary GeoJSON directly from filesystem."""
-    path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "craftproof-web", "public", "data", "india", "states.geojson"))
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="India States GeoJSON not found on filesystem.")
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-@app.get("/api/geo/geojson/haryana-districts")
-def get_haryana_districts_geojson():
-    """Serves clean 23 Haryana District boundary GeoJSON directly from filesystem."""
-    path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "craftproof-web", "public", "data", "haryana", "districts.geojson"))
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Haryana Districts GeoJSON not found on filesystem.")
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 0b. GEOGRAPHIC ATLAS — ADVANCED DISCOVERY ENDPOINTS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def haversine_km(lat1, lon1, lat2, lon2):
-    """Calculate great-circle distance between two points in km."""
-    R = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    return R * 2 * math.asin(math.sqrt(a))
-
-RECOMMENDATION_CATEGORY_GROUPS = {
-    "nearby_crafts": {"CRAFTS", "TEXTILES", "LOCAL_PRODUCTS", "CLOTHING"},
-    "nearby_food": {"FOOD"},
-    "nearby_heritage": {"MONUMENTS", "ARCHAEOLOGY", "ARCHITECTURE", "HISTORICAL_PLACES", "TEMPLES", "RELIGIOUS_HERITAGE"},
-    "nearby_events": {"FESTIVALS", "EVENTS"},
-    "nearby_nature": {"NATURE_RELATED_HERITAGE"},
-    "nearby_traditions": {"DANCE", "MUSIC", "FOLKLORE", "TRADITIONS", "TRADITIONAL_KNOWLEDGE", "RURAL_PRACTICES", "ART"},
-}
-
-@app.get("/api/geo/items/{item_slug}/recommendations")
-def get_item_recommendations(item_slug: str, db=Depends(get_db)):
-    """Returns proximity-based and category-aware recommendations for a cultural item."""
-    item = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.slug == item_slug).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Cultural item not found.")
-
-    # Get item coordinates via its GeoLocation
-    item_lat, item_lon = None, None
-    if item.location_slug:
-        loc = db.query(GeoLocation).filter(GeoLocation.slug == item.location_slug).first()
-        if loc:
-            item_lat, item_lon = loc.lat, loc.lon
-
-    if item_lat is None or item_lon is None:
-        # Fallback to district center
-        district = db.query(GeoDistrict).filter(GeoDistrict.slug == item.district_slug).first()
-        if district:
-            item_lat, item_lon = district.center_lat, district.center_lon
-        else:
-            return {"item_slug": item_slug, "nearby_crafts": [], "nearby_food": [], "nearby_heritage": [], "nearby_events": [], "nearby_nature": [], "nearby_traditions": []}
-
-    # Get all other items (same state — all Haryana districts)
-    all_items = db.query(UniversalCulturalItem).filter(
-        UniversalCulturalItem.slug != item_slug
-    ).all()
-
-    candidates = []
-    for c in all_items:
-        c_lat, c_lon = None, None
-        if c.location_slug:
-            c_loc = db.query(GeoLocation).filter(GeoLocation.slug == c.location_slug).first()
-            if c_loc:
-                c_lat, c_lon = c_loc.lat, c_loc.lon
-        if c_lat is None or c_lon is None:
-            c_dist = db.query(GeoDistrict).filter(GeoDistrict.slug == c.district_slug).first()
-            if c_dist:
-                c_lat, c_lon = c_dist.center_lat, c_dist.center_lon
-        if c_lat is not None and c_lon is not None:
-            dist_km = haversine_km(item_lat, item_lon, c_lat, c_lon)
-            c_district = db.query(GeoDistrict).filter(GeoDistrict.slug == c.district_slug).first()
-            candidates.append({
-                "slug": c.slug,
-                "title": c.title,
-                "category": c.category,
-                "distance_km": round(dist_km, 1),
-                "district_name": c_district.name if c_district else "",
-                "verification_tier": c.verification_tier,
-                "image_url": c.image_url
-            })
-
-    candidates.sort(key=lambda x: x["distance_km"])
-
-    result = {
-        "item_slug": item_slug,
-        "nearby_crafts": [],
-        "nearby_food": [],
-        "nearby_heritage": [],
-        "nearby_events": [],
-        "nearby_nature": [],
-        "nearby_traditions": [],
-    }
-
-    limits = {"nearby_crafts": 3, "nearby_food": 3, "nearby_heritage": 3, "nearby_events": 2, "nearby_nature": 2, "nearby_traditions": 3}
-    for c in candidates:
-        cat_upper = c["category"].upper()
-        for group_key, cat_set in RECOMMENDATION_CATEGORY_GROUPS.items():
-            if cat_upper in cat_set and len(result[group_key]) < limits.get(group_key, 3):
-                result[group_key].append(c)
-                break
-
-    return result
-
-
-@app.get("/api/geo/items/{item_slug}/share-card")
-def get_item_share_card(item_slug: str, db=Depends(get_db)):
-    """Returns OG-friendly share metadata for a cultural item."""
-    item = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.slug == item_slug).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Cultural item not found.")
-
-    district = db.query(GeoDistrict).filter(GeoDistrict.slug == item.district_slug).first()
-    return {
-        "title": item.title,
-        "description": item.short_description,
-        "image_url": item.image_url,
-        "category": item.category,
-        "district_name": district.name if district else "",
-        "state_name": "Haryana",
-        "share_url": f"/culture/{item.slug}",
-        "verification_tier": item.verification_tier,
-        "dharohar_tagline": "India, in Every Story."
-    }
-
-
-@app.get("/api/geo/items/{item_slug}/related")
-def get_item_related(item_slug: str, db=Depends(get_db)):
-    """Returns culturally related items: same location, same category, same district."""
-    item = db.query(UniversalCulturalItem).filter(UniversalCulturalItem.slug == item_slug).first()
-    if not item:
-        raise HTTPException(status_code=404, detail="Cultural item not found.")
-
-    same_location = []
-    if item.location_slug:
-        loc_items = db.query(UniversalCulturalItem).filter(
-            UniversalCulturalItem.location_slug == item.location_slug,
-            UniversalCulturalItem.slug != item_slug
-        ).limit(5).all()
-        for li in loc_items:
-            same_location.append({"slug": li.slug, "title": li.title, "category": li.category, "verification_tier": li.verification_tier, "image_url": li.image_url})
-
-    same_category = []
-    cat_items = db.query(UniversalCulturalItem).filter(
-        UniversalCulturalItem.category == item.category,
-        UniversalCulturalItem.district_slug == item.district_slug,
-        UniversalCulturalItem.slug != item_slug
-    ).limit(5).all()
-    for ci in cat_items:
-        same_category.append({"slug": ci.slug, "title": ci.title, "category": ci.category, "verification_tier": ci.verification_tier, "image_url": ci.image_url})
-
-    same_district = []
-    dist_items = db.query(UniversalCulturalItem).filter(
-        UniversalCulturalItem.district_slug == item.district_slug,
-        UniversalCulturalItem.slug != item_slug,
-        UniversalCulturalItem.category != item.category
-    ).limit(6).all()
-    for di in dist_items:
-        same_district.append({"slug": di.slug, "title": di.title, "category": di.category, "verification_tier": di.verification_tier, "image_url": di.image_url})
-
-    return {
-        "same_location": same_location,
-        "same_category": same_category,
-        "same_district": same_district
-    }
-
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 1. HERITAGE & MAP ENDPOINTS
@@ -3474,6 +2770,611 @@ def toggle_user_favorite(data: FavoriteToggleInput, db=Depends(get_db)):
 # 14. SYSTEM HEALTH & ZERO-DEMO RESET
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 15. DYNAMIC GEOGRAPHIC DISCOVERY & CULTURAL HIERARCHY APIS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.get("/api/geo/states")
+def get_geo_states(db=Depends(get_db)):
+    """Returns list of Indian States with geographic codes, zones, and cultural tradition counts."""
+    from geo_data import HARYANA_DISTRICTS
+    # Query database for state counts
+    states_data = [
+        {"code": "HR", "name": "Haryana", "zone": "North", "districts_count": len(HARYANA_DISTRICTS), "traditions_count": db.query(Heritage).filter(Heritage.state == "Haryana").count()},
+        {"code": "RJ", "name": "Rajasthan", "zone": "North", "districts_count": 33, "traditions_count": db.query(Heritage).filter(Heritage.state == "Rajasthan").count()},
+        {"code": "UP", "name": "Uttar Pradesh", "zone": "North", "districts_count": 75, "traditions_count": db.query(Heritage).filter(Heritage.state == "Uttar Pradesh").count()},
+        {"code": "PB", "name": "Punjab", "zone": "North", "districts_count": 23, "traditions_count": db.query(Heritage).filter(Heritage.state == "Punjab").count()},
+        {"code": "HP", "name": "Himachal Pradesh", "zone": "North", "districts_count": 12, "traditions_count": db.query(Heritage).filter(Heritage.state == "Himachal Pradesh").count()},
+        {"code": "JK", "name": "Jammu & Kashmir", "zone": "North", "districts_count": 20, "traditions_count": db.query(Heritage).filter(Heritage.state == "Jammu & Kashmir").count()},
+        {"code": "UK", "name": "Uttarakhand", "zone": "North", "districts_count": 13, "traditions_count": db.query(Heritage).filter(Heritage.state == "Uttarakhand").count()},
+        {"code": "GJ", "name": "Gujarat", "zone": "West", "districts_count": 33, "traditions_count": db.query(Heritage).filter(Heritage.state == "Gujarat").count()},
+        {"code": "MH", "name": "Maharashtra", "zone": "West", "districts_count": 36, "traditions_count": db.query(Heritage).filter(Heritage.state == "Maharashtra").count()},
+        {"code": "TN", "name": "Tamil Nadu", "zone": "South", "districts_count": 38, "traditions_count": db.query(Heritage).filter(Heritage.state == "Tamil Nadu").count()},
+        {"code": "KL", "name": "Kerala", "zone": "South", "districts_count": 14, "traditions_count": db.query(Heritage).filter(Heritage.state == "Kerala").count()},
+        {"code": "KA", "name": "Karnataka", "zone": "South", "districts_count": 31, "traditions_count": db.query(Heritage).filter(Heritage.state == "Karnataka").count()},
+        {"code": "AP", "name": "Andhra Pradesh", "zone": "South", "districts_count": 26, "traditions_count": db.query(Heritage).filter(Heritage.state == "Andhra Pradesh").count()},
+        {"code": "TS", "name": "Telangana", "zone": "South", "districts_count": 33, "traditions_count": db.query(Heritage).filter(Heritage.state == "Telangana").count()},
+        {"code": "WB", "name": "West Bengal", "zone": "East", "districts_count": 23, "traditions_count": db.query(Heritage).filter(Heritage.state == "West Bengal").count()},
+        {"code": "OR", "name": "Odisha", "zone": "East", "districts_count": 30, "traditions_count": db.query(Heritage).filter(Heritage.state == "Odisha").count()},
+        {"code": "BR", "name": "Bihar", "zone": "East", "districts_count": 38, "traditions_count": db.query(Heritage).filter(Heritage.state == "Bihar").count()},
+        {"code": "MP", "name": "Madhya Pradesh", "zone": "Central", "districts_count": 55, "traditions_count": db.query(Heritage).filter(Heritage.state == "Madhya Pradesh").count()},
+        {"code": "AS", "name": "Assam", "zone": "Northeast", "districts_count": 35, "traditions_count": db.query(Heritage).filter(Heritage.state == "Assam").count()}
+    ]
+    return states_data
+
+@app.get("/api/geo/states/{state_code}/districts")
+def get_geo_state_districts(state_code: str, db=Depends(get_db)):
+    """Returns districts for a state with coordinates, cultural items count, and administrative details."""
+    sc = state_code.upper()
+    if sc in ("HR", "HARYANA"):
+        from geo_data import HARYANA_DISTRICTS
+        districts_out = []
+        for d in HARYANA_DISTRICTS:
+            h_count = db.query(Heritage).filter(
+                Heritage.state == "Haryana",
+                Heritage.district.ilike(f"%{d['name']}%")
+            ).count()
+            v_count = db.query(GeoEntity).filter(
+                GeoEntity.district_slug == d["slug"],
+                GeoEntity.entity_type == "village"
+            ).count()
+            districts_out.append({
+                "slug": d["slug"],
+                "name": d["name"],
+                "state_code": "HR",
+                "lat": d["lat"],
+                "lon": d["lon"],
+                "hq": d["hq"],
+                "area_sq_km": d["area_sq_km"],
+                "tagline": d["tagline"],
+                "description": d["description"],
+                "primary_domains": d["primary_domains"],
+                "subdivisions_count": len(d.get("subdivisions", [])),
+                "tehsils_count": len(d.get("tehsils", [])),
+                "villages_count": v_count,
+                "cultural_records_count": h_count
+            })
+        return districts_out
+    
+    # Generic query for other states from database
+    heritages = db.query(Heritage).filter(or_(Heritage.state.ilike(state_code), Heritage.state.ilike(f"%{state_code}%"))).all()
+    districts_set = {}
+    for h in heritages:
+        if h.district and h.district not in districts_set:
+            districts_set[h.district] = {
+                "slug": h.district.lower().replace(" ", "-"),
+                "name": h.district,
+                "state_code": state_code.upper()[:2],
+                "lat": h.lat,
+                "lon": h.lon,
+                "tagline": f"Historic cultural district of {h.state}",
+                "description": h.short_description or h.description,
+                "cultural_records_count": 1
+            }
+        elif h.district:
+            districts_set[h.district]["cultural_records_count"] += 1
+    return list(districts_set.values())
+
+@app.get("/api/geo/districts/{district_slug}")
+def get_geo_district(district_slug: str, db=Depends(get_db)):
+    """Returns deep district dossier including administrative subdivisions, tehsils, villages, and cultural records."""
+    d_slug = district_slug.lower()
+    from geo_data import HARYANA_DISTRICTS
+    matched_district = next((d for d in HARYANA_DISTRICTS if d["slug"] == d_slug), None)
+    
+    # Find cultural records in this district
+    h_records = db.query(Heritage).filter(
+        or_(
+            Heritage.district.ilike(f"%{d_slug}%"),
+            Heritage.district.ilike(f"%{matched_district['name']}%" if matched_district else "")
+        )
+    ).all()
+    
+    # Find local geo entities (subdivisions, tehsils, villages)
+    geo_entities = db.query(GeoEntity).filter(GeoEntity.district_slug == d_slug).all()
+    
+    subdivisions = [e for e in geo_entities if e.entity_type == "subdivision"]
+    tehsils = [e for e in geo_entities if e.entity_type == "tehsil"]
+    villages = [e for e in geo_entities if e.entity_type == "village"]
+
+    # Also check events in this district
+    events = db.query(CulturalEvent).filter(
+        or_(
+            CulturalEvent.district.ilike(f"%{d_slug}%"),
+            CulturalEvent.district.ilike(f"%{matched_district['name']}%" if matched_district else "")
+        )
+    ).all()
+
+    return {
+        "slug": d_slug,
+        "name": matched_district["name"] if matched_district else district_slug.title(),
+        "state": "Haryana",
+        "lat": matched_district["lat"] if matched_district else (h_records[0].lat if h_records else 29.39),
+        "lon": matched_district["lon"] if matched_district else (h_records[0].lon if h_records else 76.96),
+        "tagline": matched_district.get("tagline", "") if matched_district else "Cultural District",
+        "description": matched_district.get("description", "") if matched_district else "",
+        "primary_domains": matched_district.get("primary_domains", []) if matched_district else [],
+        "subdivisions": [{"name": s.name, "slug": s.slug} for s in subdivisions],
+        "tehsils": [{"name": t.name, "slug": t.slug} for t in tehsils],
+        "villages": [
+            {
+                "name": v.name,
+                "slug": v.slug,
+                "has_cultural_record": v.has_cultural_record,
+                "cultural_status": v.cultural_status,
+                "status_notice": v.status_notice,
+                "lat": v.lat,
+                "lon": v.lon
+            }
+            for v in villages
+        ],
+        "cultural_records": [
+            {
+                "id": h.id,
+                "name": h.name,
+                "category": h.category,
+                "subcategory": h.subcategory,
+                "short_description": h.short_description or h.description,
+                "image_url": h.image_url,
+                "gi_tag": h.gi_tag,
+                "preservation_status": h.preservation_status,
+                "lat": h.lat,
+                "lon": h.lon,
+                "has_3d": h.has_3d
+            }
+            for h in h_records
+        ],
+        "events": [
+            {
+                "event_id": ev.event_id,
+                "title": ev.title,
+                "category": ev.category,
+                "start_date": ev.start_date,
+                "end_date": ev.end_date,
+                "venue": ev.venue,
+                "status": ev.status,
+                "image_url": ev.image_url
+            }
+            for ev in events
+        ]
+    }
+
+@app.get("/api/geo/districts/{district_slug}/localities")
+def get_district_localities(district_slug: str, db=Depends(get_db)):
+    """Returns list of localities, tehsils, and villages in a district with strict verification status."""
+    entities = db.query(GeoEntity).filter(GeoEntity.district_slug == district_slug.lower()).all()
+    return [
+        {
+            "id": e.id,
+            "slug": e.slug,
+            "name": e.name,
+            "entity_type": e.entity_type,
+            "parent_slug": e.parent_slug,
+            "district_slug": e.district_slug,
+            "lat": e.lat,
+            "lon": e.lon,
+            "description": e.description,
+            "has_cultural_record": e.has_cultural_record,
+            "cultural_status": e.cultural_status,
+            "status_notice": e.status_notice
+        }
+        for e in entities
+    ]
+
+@app.get("/api/geo/localities/{locality_slug}")
+def get_geo_locality(locality_slug: str, db=Depends(get_db)):
+    """Returns locality profile. If unverified, explicitly displays 'Geographic record available. Cultural documentation not yet verified.'"""
+    locality = db.query(GeoEntity).filter(GeoEntity.slug == locality_slug.lower()).first()
+    if not locality:
+        raise HTTPException(status_code=404, detail="Locality not found")
+
+    items = db.query(Heritage).filter(
+        or_(
+            Heritage.village.ilike(f"%{locality.name}%"),
+            Heritage.locality.ilike(f"%{locality.name}%"),
+            Heritage.subdistrict.ilike(f"%{locality.name}%")
+        )
+    ).all()
+
+    return {
+        "slug": locality.slug,
+        "name": locality.name,
+        "entity_type": locality.entity_type,
+        "parent_slug": locality.parent_slug,
+        "district_slug": locality.district_slug,
+        "state_code": locality.state_code,
+        "lat": locality.lat,
+        "lon": locality.lon,
+        "description": locality.description,
+        "has_cultural_record": locality.has_cultural_record or len(items) > 0,
+        "cultural_status": "VERIFIED" if len(items) > 0 else locality.cultural_status,
+        "status_notice": (
+            f"Documented: {len(items)} verified cultural tradition(s)."
+            if len(items) > 0
+            else locality.status_notice
+        ),
+        "items": [
+            {
+                "id": h.id,
+                "name": h.name,
+                "category": h.category,
+                "subcategory": h.subcategory,
+                "short_description": h.short_description or h.description,
+                "image_url": h.image_url,
+                "gi_tag": h.gi_tag,
+                "lat": h.lat,
+                "lon": h.lon
+            }
+            for h in items
+        ]
+    }
+
+@app.get("/api/geo/localities/{locality_slug}/items")
+def get_locality_items(locality_slug: str, db=Depends(get_db)):
+    """Returns verified cultural records belonging to this locality or village."""
+    locality = db.query(GeoEntity).filter(GeoEntity.slug == locality_slug.lower()).first()
+    if not locality:
+        return []
+    items = db.query(Heritage).filter(
+        or_(
+            Heritage.village.ilike(f"%{locality.name}%"),
+            Heritage.locality.ilike(f"%{locality.name}%"),
+            Heritage.subdistrict.ilike(f"%{locality.name}%")
+        )
+    ).all()
+    return [
+        {
+            "id": h.id,
+            "name": h.name,
+            "category": h.category,
+            "subcategory": h.subcategory,
+            "description": h.description,
+            "short_description": h.short_description,
+            "image_url": h.image_url,
+            "gi_tag": h.gi_tag,
+            "why_here": h.why_here,
+            "what_makes_it_special": h.what_makes_it_special,
+            "lat": h.lat,
+            "lon": h.lon
+        }
+        for h in items
+    ]
+
+@app.get("/api/geo/items/{item_slug}")
+def get_geo_item_dossier(item_slug: str, db=Depends(get_db)):
+    """Returns premium location dossier with hero image, evidence, why_here, sources, and actions."""
+    # Support lookup by ID or by name/slug match
+    h = None
+    if item_slug.isdigit():
+        h = db.query(Heritage).filter(Heritage.id == int(item_slug)).first()
+    if not h:
+        clean_slug = item_slug.replace("-", " ")
+        h = db.query(Heritage).filter(or_(Heritage.name.ilike(f"%{clean_slug}%"), Heritage.name.ilike(f"%{item_slug}%"))).first()
+    if not h:
+        tokens = [t for t in item_slug.replace("-", " ").split() if len(t) > 2]
+        if tokens:
+            filters = [Heritage.name.ilike(f"%{tok}%") for tok in tokens]
+            h = db.query(Heritage).filter(or_(*filters)).first()
+    if not h:
+        raise HTTPException(status_code=404, detail="Cultural record not found")
+
+    evidence_records = db.query(HeritageEvidence).filter(HeritageEvidence.heritage_id == h.id).all()
+    
+    # Connected practitioners
+    practitioners = db.query(Artisan).filter(
+        or_(
+            Artisan.craft.ilike(f"%{h.category}%"),
+            Artisan.district.ilike(f"%{h.district}%" if h.district else ""),
+            Artisan.state.ilike(f"%{h.state}%")
+        )
+    ).limit(3).all()
+
+    # Connected events
+    events = db.query(CulturalEvent).filter(
+        or_(
+            CulturalEvent.linked_heritage_id == h.id,
+            CulturalEvent.district.ilike(f"%{h.district}%" if h.district else "")
+        )
+    ).limit(2).all()
+
+    return {
+        "id": h.id,
+        "name": h.name,
+        "slug": h.name.lower().replace(" ", "-"),
+        "category": h.category,
+        "subcategory": h.subcategory,
+        "state": h.state,
+        "region": h.region,
+        "district": h.district,
+        "subdistrict": h.subdistrict,
+        "village": h.village,
+        "locality": h.locality,
+        "lat": h.lat,
+        "lon": h.lon,
+        "description": h.description,
+        "short_description": h.short_description,
+        "history": h.history,
+        "historical_context": h.historical_context,
+        "techniques": h.techniques,
+        "materials": h.materials,
+        "cultural_significance": h.cultural_significance,
+        "current_practice": h.current_practice,
+        "preservation_status": h.preservation_status,
+        "at_risk_level": h.at_risk_level,
+        "at_risk_reason": h.at_risk_reason,
+        "featured": h.featured,
+        "color_accent": h.color_accent,
+        "gi_tag": h.gi_tag,
+        "gi_number": h.gi_number,
+        "has_3d": h.has_3d,
+        "model_3d_type": h.model_3d_type,
+        "media": {
+            "hero_image": h.image_url,
+            "image_source_name": h.image_source_name,
+            "image_source_url": h.image_source_url,
+            "image_alt": h.image_alt or h.name,
+            "audio_url": h.audio_url
+        },
+        "why_here": h.why_here or f"Historically rooted in {h.region or h.district or h.state} owing to specific local raw materials, trade networks, and artisan guild settlements.",
+        "what_makes_it_special": h.what_makes_it_special or h.short_description,
+        "distinctiveness": {
+            "type": h.distinctiveness_type,
+            "statement": h.distinctiveness_statement,
+            "source": h.distinctiveness_source
+        },
+        "verification": {
+            "status": "VERIFIED" if h.source_type == "OFFICIAL" or len(evidence_records) > 0 else "UNDER_REVIEW",
+            "badge": "✓ VERIFIED" if h.source_type == "OFFICIAL" or len(evidence_records) > 0 else "◐ UNDER REVIEW",
+            "evidence_count": len(evidence_records),
+            "sources": [
+                {
+                    "claim": ev.claim,
+                    "source_name": ev.source_name,
+                    "source_url": ev.source_url,
+                    "source_type": ev.source_type,
+                    "verification_status": ev.verification_status
+                }
+                for ev in evidence_records
+            ]
+        },
+        "connected_practitioners": [
+            {
+                "id": a.id,
+                "name": a.full_name,
+                "district": a.district,
+                "state": a.state,
+                "craft": a.craft,
+                "passbook_url": f"/artisan/{a.id}"
+            }
+            for a in practitioners
+        ],
+        "events": [
+            {
+                "event_id": ev.event_id,
+                "title": ev.title,
+                "start_date": ev.start_date,
+                "end_date": ev.end_date,
+                "venue": ev.venue,
+                "status": ev.status
+            }
+            for ev in events
+        ],
+        "actions": {
+            "view_on_map": True,
+            "get_directions_url": f"https://www.google.com/maps/dir/?api=1&destination={h.lat},{h.lon}",
+            "share_url": f"/heritage/{h.id}",
+            "open_passport": True if practitioners else False
+        }
+    }
+
+@app.get("/api/geo/items/{item_slug}/story")
+def get_geo_item_story(item_slug: str, db=Depends(get_db)):
+    """Returns narrative story, audio guide, and oral history text."""
+    h = None
+    if item_slug.isdigit():
+        h = db.query(Heritage).filter(Heritage.id == int(item_slug)).first()
+    if not h:
+        clean_slug = item_slug.replace("-", " ")
+        h = db.query(Heritage).filter(Heritage.name.ilike(f"%{clean_slug}%")).first()
+    if not h:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    return {
+        "id": h.id,
+        "name": h.name,
+        "story_text": h.story_text or h.history,
+        "audio_url": h.audio_url,
+        "cultural_dna": h.cultural_dna,
+        "cultural_significance": h.cultural_significance,
+        "narrative_title": f"The Living Story of {h.name}",
+        "district": h.district,
+        "state": h.state
+    }
+
+@app.get("/api/geo/items/{item_slug}/recommendations")
+def get_geo_recommendations(item_slug: str, db=Depends(get_db)):
+    """Contextual recommendations based on geographic proximity and cultural domain."""
+    h = None
+    if item_slug.isdigit():
+        h = db.query(Heritage).filter(Heritage.id == int(item_slug)).first()
+    if not h:
+        clean_slug = item_slug.replace("-", " ")
+        h = db.query(Heritage).filter(Heritage.name.ilike(f"%{clean_slug}%")).first()
+    if not h:
+        return []
+
+    # Recommendations in same district or state, excluding self
+    nearby = db.query(Heritage).filter(
+        Heritage.id != h.id,
+        or_(
+            Heritage.district == h.district,
+            Heritage.state == h.state,
+            Heritage.category == h.category
+        )
+    ).limit(4).all()
+
+    return [
+        {
+            "id": rec.id,
+            "name": rec.name,
+            "category": rec.category,
+            "state": rec.state,
+            "district": rec.district,
+            "short_description": rec.short_description or rec.description,
+            "image_url": rec.image_url,
+            "gi_tag": rec.gi_tag,
+            "lat": rec.lat,
+            "lon": rec.lon
+        }
+        for rec in nearby
+    ]
+
+@app.get("/api/geo/items/{item_slug}/related")
+def get_geo_related(item_slug: str, db=Depends(get_db)):
+    """Returns related cultural items in the same domain."""
+    return get_geo_recommendations(item_slug, db)
+
+@app.get("/api/geo/search")
+def geo_search(q: str = Query(..., min_length=1), db=Depends(get_db)):
+    """Omni-search across geographic entities, cultural traditions, food, crafts, and events."""
+    query = q.strip().lower()
+    
+    # Search Heritage
+    heritages = db.query(Heritage).filter(
+        or_(
+            Heritage.name.ilike(f"%{query}%"),
+            Heritage.district.ilike(f"%{query}%"),
+            Heritage.category.ilike(f"%{query}%"),
+            Heritage.state.ilike(f"%{query}%"),
+            Heritage.village.ilike(f"%{query}%"),
+            Heritage.description.ilike(f"%{query}%"),
+            Heritage.gi_tag.ilike(f"%{query}%")
+        )
+    ).limit(8).all()
+
+    # Search GeoEntities (Districts / Villages)
+    geo_entities = db.query(GeoEntity).filter(
+        or_(
+            GeoEntity.name.ilike(f"%{query}%"),
+            GeoEntity.district_slug.ilike(f"%{query}%")
+        )
+    ).limit(6).all()
+
+    # Search Events
+    events = db.query(CulturalEvent).filter(
+        or_(
+            CulturalEvent.title.ilike(f"%{query}%"),
+            CulturalEvent.city.ilike(f"%{query}%"),
+            CulturalEvent.district.ilike(f"%{query}%"),
+            CulturalEvent.category.ilike(f"%{query}%")
+        )
+    ).limit(4).all()
+
+    return {
+        "query": q,
+        "results_count": len(heritages) + len(geo_entities) + len(events),
+        "heritage": [
+            {
+                "id": h.id,
+                "name": h.name,
+                "category": h.category,
+                "district": h.district,
+                "state": h.state,
+                "image_url": h.image_url,
+                "lat": h.lat,
+                "lon": h.lon
+            }
+            for h in heritages
+        ],
+        "places": [
+            {
+                "slug": g.slug,
+                "name": g.name,
+                "entity_type": g.entity_type,
+                "district_slug": g.district_slug,
+                "has_cultural_record": g.has_cultural_record,
+                "status_notice": g.status_notice,
+                "lat": g.lat,
+                "lon": g.lon
+            }
+            for g in geo_entities
+        ],
+        "events": [
+            {
+                "event_id": ev.event_id,
+                "title": ev.title,
+                "venue": ev.venue,
+                "city": ev.city,
+                "start_date": ev.start_date,
+                "status": ev.status
+            }
+            for ev in events
+        ]
+    }
+
+@app.get("/api/geo/events/nearby")
+def get_geo_events_nearby(district: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None, radius: float = 80.0, db=Depends(get_db)):
+    """Returns location-aware cultural events and seasonal fairs."""
+    query = db.query(CulturalEvent)
+    if district:
+        query = query.filter(CulturalEvent.district.ilike(f"%{district}%"))
+    events = query.all()
+    
+    if lat is not None and lon is not None:
+        def calc_dist(e_lat, e_lon):
+            if not e_lat or not e_lon: return 9999
+            return math.sqrt((e_lat - lat)**2 + (e_lon - lon)**2) * 111.0
+        events = [e for e in events if calc_dist(e.lat, e.lon) <= radius]
+
+    return [
+        {
+            "event_id": ev.event_id,
+            "title": ev.title,
+            "description": ev.description,
+            "category": ev.category,
+            "start_date": ev.start_date,
+            "end_date": ev.end_date,
+            "venue": ev.venue,
+            "city": ev.city,
+            "district": ev.district,
+            "state": ev.state,
+            "lat": ev.lat,
+            "lon": ev.lon,
+            "organizer": ev.organizer,
+            "image_url": ev.image_url,
+            "status": ev.status,
+            "directions_url": f"https://www.google.com/maps/dir/?api=1&destination={ev.lat},{ev.lon}"
+        }
+        for ev in events
+    ]
+
+@app.get("/api/geo/categories")
+def get_geo_categories(db=Depends(get_db)):
+    """Returns 15 living cultural domains with verified count."""
+    domains = [
+        {"id": "craft", "label": "Crafts & Handloom", "icon": "🏺", "color": "#ea580c"},
+        {"id": "textile", "label": "Textiles & Weaves", "icon": "🧵", "color": "#b45309"},
+        {"id": "clothing", "label": "Traditional Attire", "icon": "👘", "color": "#d97706"},
+        {"id": "food", "label": "Culinary Heritage", "icon": "🍲", "color": "#f59e0b"},
+        {"id": "architecture", "label": "Historic Citadels", "icon": "🏰", "color": "#0f766e"},
+        {"id": "monument", "label": "Monuments", "icon": "🏛️", "color": "#115e59"},
+        {"id": "spiritual", "label": "Sacred Places", "icon": "🛕", "color": "#0284c7"},
+        {"id": "archaeology", "label": "Archaeology", "icon": "⛏️", "color": "#c2410c"},
+        {"id": "dance", "label": "Folk Dance & Theatre", "icon": "💃", "color": "#c026d3"},
+        {"id": "music", "label": "Folk Ballads & Music", "icon": "🎵", "color": "#9333ea"},
+        {"id": "folklore", "label": "Folklore & Oral Tales", "icon": "📜", "color": "#854d0e"},
+        {"id": "festival", "label": "Fairs & Melas", "icon": "🎪", "color": "#e11d48"},
+        {"id": "nature", "label": "Sacred Landscapes", "icon": "🌳", "color": "#15803d"},
+        {"id": "traditional_knowledge", "label": "Traditional Knowledge", "icon": "🌿", "color": "#166534"},
+        {"id": "art", "label": "Folk Art & Wall Painting", "icon": "🎨", "color": "#be123c"}
+    ]
+    for dom in domains:
+        count = db.query(Heritage).filter(Heritage.category == dom["id"]).count()
+        dom["items_count"] = count
+    return domains
+
+
 @app.get("/health")
 def health(db=Depends(get_db)):
     return {
@@ -3489,9 +3390,6 @@ def health(db=Depends(get_db)):
         "workshops_count": db.query(Workshop).count(),
         "contributions_count": db.query(CommunityContribution).count(),
         "claims_count": db.query(HeritageClaim).count(),
-        "geo_states_count": db.query(GeoState).count(),
-        "geo_districts_count": db.query(GeoDistrict).count(),
-        "cultural_items_count": db.query(UniversalCulturalItem).count(),
         "mode": "PURE_DYNAMIC_NO_DEMO_DATA"
     }
 

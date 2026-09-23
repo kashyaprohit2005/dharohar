@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import Navbar from '../../components/Navbar';
-import { artisanAPI, verificationAPI, API_BASE_URL } from '@/lib/api';
+import { artisanAPI, verificationAPI } from '@/lib/api';
 
 interface ArtisanData {
   id: number;
@@ -214,7 +214,7 @@ export default function ArtisanDashboard() {
       if (Array.isArray(wsReqRes)) setWorkshopRequests(wsReqRes);
 
       // Fetch workshops from public listing for this artisan
-      const allWsRes = await fetch(`${API_BASE_URL}/api/workshops`).then(r => r.json()).catch(() => []);
+      const allWsRes = await fetch('http://localhost:8000/api/workshops').then(r => r.json()).catch(() => []);
       if (Array.isArray(allWsRes)) {
         setWorkshops(allWsRes.filter((w: any) => w.artisan?.id === id));
       }
@@ -757,7 +757,7 @@ export default function ArtisanDashboard() {
                             {/* DYNAMIC QR CODE */}
                             <div className="p-2 bg-white rounded-xl border border-[#e6e5e2] shadow-sm">
                               <QRCodeSVG
-                                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/verify/${b.qr_token}`}
+                                value={`http://localhost:3000/verify/${b.qr_token}`}
                                 size={80}
                                 level="M"
                               />

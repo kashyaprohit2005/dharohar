@@ -9,7 +9,7 @@ import AudioStoryPlayer from '../../components/AudioStoryPlayer';
 import SocialShareModal, { ShareItem } from '../../components/SocialShareModal';
 import EventCard, { CulturalEventData } from '../../components/EventCard';
 import { recordTrailStop } from '../../components/HeritageTrail';
-import { heritageAPI, API_BASE_URL } from '@/lib/api';
+import { heritageAPI } from '@/lib/api';
 import axios from 'axios';
 
 const IndiaMap = dynamic(() => import('../../components/IndiaMap'), {
@@ -61,7 +61,7 @@ export default function HeritagePassportPage() {
       .catch(err => console.error("Error loading heritage passport:", err))
       .finally(() => setLoading(false));
 
-    axios.get(`${API_BASE_URL}/api/events`)
+    axios.get("http://localhost:8000/api/events")
       .then(res => {
         if (Array.isArray(res.data)) {
           const linked = res.data.filter((ev: any) => 

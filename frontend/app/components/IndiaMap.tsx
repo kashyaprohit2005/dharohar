@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import L from "leaflet";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import dynamic from "next/dynamic";
 import { getCategoryConfig } from "./VisualCultureCard";
 import { INDIA_STATES_DATA } from "../data/indiaGeoData";
 import { CulturalEventData } from "./EventCard";
-import { API_BASE_URL } from "@/lib/api";
+import India2DVectorMap from "./India2DVectorMap";
+import IndiaMapToolbar, { LayerState } from "./IndiaMapToolbar";
+import LocationDossier, { LocationDossierItem } from "./LocationDossier";
 import { 
   Layers, 
   MapPin, 
@@ -16,10 +16,25 @@ import {
   Calendar, 
   Navigation, 
   Search, 
-  Eye, 
-  BookOpen, 
-  Users 
+  Compass, 
+  Box, 
+  Map as MapIcon,
+  X,
+  ArrowRight
 } from "lucide-react";
+import { geoAPI } from "@/lib/api";
+
+const India3DMap = dynamic(() => import("./India3DMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-[620px] rounded-3xl bg-[#FAF6EE] flex flex-col items-center justify-center text-sm text-[#78350F] border border-[#E2D8C3]">
+      <div className="flex items-center gap-3">
+        <div className="w-5 h-5 rounded-full border-2 border-[#B45309] border-t-transparent animate-spin"></div>
+        <span className="font-serif font-semibold">Opening India's 3D living cultural atlas…</span>
+      </div>
+    </div>
+  ),
+});
 
 export interface HeritageMarker {
   id: number;
@@ -30,6 +45,8 @@ export interface HeritageMarker {
   state: string;
   district?: string;
   village?: string;
+  subdistrict?: string;
+  locality?: string;
   lat: number;
   lon: number;
   gi_tag: string | null;
@@ -37,6 +54,9 @@ export interface HeritageMarker {
   at_risk_level?: string;
   short_description?: string;
   description?: string;
+  history?: string;
+  techniques?: string;
+  materials?: string;
   image_url?: string | null;
   image_source_name?: string;
   image_alt?: string;
@@ -63,526 +83,299 @@ interface IndiaMapProps {
   onSelectHeritage?: (id: number) => void;
   onSelectState?: (stateName: string) => void;
   onSelectEvent?: (event: CulturalEventData) => void;
+  onOpenDossier?: (item: any) => void;
 }
-
-function MapController({
-  selectedState,
-  heritage,
-  events,
-  activeId,
-}: {
-  selectedState?: string;
-  heritage?: HeritageMarker[];
-  events?: CulturalEventData[];
-  activeId?: number | null;
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (activeId && heritage) {
-      const target = heritage.find((h) => h.id === activeId);
-      if (target && target.lat && target.lon) {
-        map.flyTo([target.lat, target.lon], 9, { duration: 1.2 });
-        return;
-      }
-    }
-
-    if (selectedState && selectedState !== "ALL") {
-      const key = selectedState.toLowerCase();
-      if (INDIA_STATES_DATA[key]) {
-        map.flyTo(INDIA_STATES_DATA[key].center, INDIA_STATES_DATA[key].zoom, { duration: 1.2 });
-        return;
-      }
-      const stateItems = heritage ? heritage.filter((h) => h.state.toLowerCase() === key) : [];
-      if (stateItems.length > 0 && stateItems[0].lat && stateItems[0].lon) {
-        map.flyTo([stateItems[0].lat, stateItems[0].lon], 7.5, { duration: 1.2 });
-        return;
-      }
-    }
-
-    // Default India panorama overview
-    map.flyTo([22.5, 78.9], 5, { duration: 1 });
-  }, [selectedState, activeId, heritage, events, map]);
-
-  return null;
-}
-
-// Custom DivIcon marker generator for heritage traditions
-const createCustomMarkerIcon = (category: string, isSelected: boolean, isAtRisk: boolean, has3D: boolean) => {
-  if (typeof window === "undefined") return undefined;
-
-  const cfg = getCategoryConfig(category);
-  const size = isSelected ? 44 : 36;
-
-  const html = `
-    <div style="position: relative; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none;">
-      ${
-        isSelected
-          ? `<div style="position: absolute; inset: -5px; border-radius: 9999px; background-color: ${cfg.accentColor}; opacity: 0.4; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>`
-          : ""
-      }
-      <div style="
-        width: ${size}px;
-        height: ${size}px;
-        border-radius: 9999px;
-        background-color: ${cfg.accentColor};
-        border: 2px solid ${isSelected ? "#ffffff" : "#ffffff"};
-        box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: ${isSelected ? "20px" : "16px"};
-        transform: ${isSelected ? "scale(1.15)" : "scale(1)"};
-        transition: transform 0.2s ease;
-      ">
-        <span style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)); line-height: 1;">${cfg.icon}</span>
-      </div>
-      ${
-        has3D
-          ? `<span style="position: absolute; bottom: -2px; right: -2px; background: #000; color: #f59e0b; font-size: 8px; font-weight: 800; padding: 1px 3px; border-radius: 4px; border: 1px solid #f59e0b;">3D</span>`
-          : ""
-      }
-      ${
-        isAtRisk
-          ? `<span style="position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; border-radius: 9999px; background: #f59e0b; border: 2px solid #fff;"></span>`
-          : ""
-      }
-    </div>
-  `;
-
-  return L.divIcon({
-    className: "custom-heritage-div-icon",
-    html: html,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -size / 2],
-  });
-};
-
-// Custom DivIcon marker generator for live cultural events
-const createEventMarkerIcon = (isLive: boolean) => {
-  if (typeof window === "undefined") return undefined;
-
-  const size = isLive ? 42 : 36;
-  const color = isLive ? "#dc2626" : "#ea580c";
-
-  const html = `
-    <div style="position: relative; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none;">
-      ${
-        isLive
-          ? `<div style="position: absolute; inset: -4px; border-radius: 9999px; background-color: #ef4444; opacity: 0.5; animation: ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>`
-          : ""
-      }
-      <div style="
-        width: ${size}px;
-        height: ${size}px;
-        border-radius: 9999px;
-        background: linear-gradient(135deg, ${color}, #7f1d1d);
-        border: 2px solid #ffffff;
-        box-shadow: 0 4px 14px rgba(220, 38, 38, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-      ">
-        <span>${isLive ? "🔴" : "📅"}</span>
-      </div>
-      <span style="position: absolute; bottom: -3px; right: -3px; background: #111; color: #fff; font-size: 7px; font-weight: 800; padding: 1px 3px; border-radius: 3px; border: 1px solid #ef4444;">LIVE</span>
-    </div>
-  `;
-
-  return L.divIcon({
-    className: "custom-event-div-icon",
-    html: html,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -size / 2],
-  });
-};
 
 export default function IndiaMap({
   heritage = [],
   events = [],
-  height = "600px",
-  selectedState,
+  height = "620px",
+  selectedState = "ALL",
   activeId,
   onSelectHeritage,
   onSelectState,
   onSelectEvent,
+  onOpenDossier,
 }: IndiaMapProps) {
-  const [mounted, setMounted] = useState(false);
-  
-  // 5 Multi-Layer Toggles
-  const [layers, setLayers] = useState({
-    culture: true,   // Crafts, textiles, clothing, food, art, folklore, music, dance
-    places: true,    // Forts, stepwells, sacred places, architecture
-    people: true,    // Living practitioners
-    events: true,    // Live cultural events & festivals
-    learn: true,     // Traditional knowledge & practices
+  const [mapMode, setMapMode] = useState<"2D" | "3D">("2D");
+  const [isClient, setIsClient] = useState(false);
+  const [layers, setLayers] = useState<LayerState>({
+    crafts: true,
+    places: true,
+    food: true,
+    events: true,
+    knowledge: true,
   });
 
+  // Search Modal overlay state
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showLayerPanel, setShowLayerPanel] = useState(false);
+  const [searchResults, setSearchResults] = useState<any>({ heritage: [], places: [], events: [] });
+  const [searching, setSearching] = useState(false);
+
+  // Internal Location Dossier Modal
+  const [dossierItem, setDossierItem] = useState<LocationDossierItem | null>(null);
+  const [dossierOpen, setDossierOpen] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    setIsClient(true);
   }, []);
 
-  if (!mounted) {
+  const handleToggleLayer = (key: keyof LayerState) => {
+    setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleRecenter = () => {
+    if (onSelectState) onSelectState("ALL");
+  };
+
+  const handleSearchExecute = (q: string) => {
+    setSearchQuery(q);
+    if (!q.trim()) {
+      setSearchResults({ heritage: [], places: [], events: [] });
+      return;
+    }
+
+    setSearching(true);
+    geoAPI
+      .search(q)
+      .then((res) => {
+        setSearchResults(res.data || { heritage: [], places: [], events: [] });
+      })
+      .catch(() => {
+        setSearchResults({ heritage: [], places: [], events: [] });
+      })
+      .finally(() => setSearching(false));
+  };
+
+  const handleOpenItemDossier = (item: any) => {
+    setDossierItem(item);
+    setDossierOpen(true);
+    if (onOpenDossier) onOpenDossier(item);
+    if (item.id && onSelectHeritage) onSelectHeritage(item.id);
+  };
+
+  if (!isClient) {
     return (
-      <div
+      <div 
+        className="w-full rounded-3xl bg-[#FAF6EE] flex flex-col items-center justify-center border border-[#E2D8C3] text-[#78350F] shadow-sm space-y-2.5"
         style={{ height }}
-        className="w-full rounded-3xl bg-stone-900 flex items-center justify-center text-sm text-stone-400 border border-stone-800"
       >
         <div className="flex items-center gap-3">
-          <div className="w-5 h-5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin"></div>
-          <span className="font-serif">Loading Dharohar Living Cultural Atlas...</span>
+          <div className="w-5 h-5 rounded-full border-2 border-[#B45309] border-t-transparent animate-spin"></div>
+          <span className="font-serif font-semibold text-sm">Opening India's living cultural atlas…</span>
         </div>
+        <span className="text-[10px] text-stone-400 font-mono tracking-widest uppercase">Dharohar • Preserving Heritage</span>
       </div>
     );
   }
 
-  // Filter heritage by selected state and search query
-  const filteredHeritage = heritage.filter((h) => {
-    if (selectedState && selectedState !== "ALL" && h.state.toLowerCase() !== selectedState.toLowerCase()) {
-      return false;
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const match =
-        h.name.toLowerCase().includes(q) ||
-        h.category.toLowerCase().includes(q) ||
-        h.state.toLowerCase().includes(q) ||
-        (h.district && h.district.toLowerCase().includes(q));
-      if (!match) return false;
-    }
-
-    // Filter by Layer Toggles
-    const cat = h.category.toLowerCase();
-    if (["architecture", "spiritual"].includes(cat) && !layers.places) return false;
-    if (["traditional_knowledge", "cultural_practices"].includes(cat) && !layers.learn) return false;
-    if (["craft", "textile", "clothing", "food", "art", "folklore", "music", "dance", "performing_arts"].includes(cat) && !layers.culture) return false;
-
-    return true;
-  });
-
-  // Filter events by selected state and search query
-  const filteredEvents = events.filter((e) => {
-    if (!layers.events) return false;
-    if (selectedState && selectedState !== "ALL" && e.state.toLowerCase() !== selectedState.toLowerCase()) {
-      return false;
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const match =
-        e.title.toLowerCase().includes(q) ||
-        e.city.toLowerCase().includes(q) ||
-        e.state.toLowerCase().includes(q);
-      if (!match) return false;
-    }
-    return true;
-  });
-
-  const toggleLayer = (layerKey: keyof typeof layers) => {
-    setLayers((prev) => ({ ...prev, [layerKey]: !prev[layerKey] }));
-  };
-
   return (
-    <div
-      style={{ height }}
-      className="w-full relative rounded-3xl overflow-hidden border border-stone-800 shadow-2xl bg-stone-950 font-sans"
-    >
-      <MapContainer
-        center={[22.5, 78.9]}
-        zoom={5}
-        scrollWheelZoom={true}
-        touchZoom={true}
-        dragging={true}
-        doubleClickZoom={true}
-        className="w-full h-full"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-        />
-
-        <MapController
-          selectedState={selectedState}
-          heritage={heritage}
-          events={events}
-          activeId={activeId}
-        />
-
-        {/* Heritage Tradition Markers */}
-        {filteredHeritage.map((h) => {
-          if (!h.lat || !h.lon) return null;
-          const isSelected = activeId === h.id;
-          const cfg = getCategoryConfig(h.category);
-          const isAtRisk = Boolean(
-            h.preservation_status === "PRESERVATION_WATCH" ||
-            h.preservation_status === "ENDANGERED" ||
-            (h.at_risk_level && h.at_risk_level !== "STABLE")
-          );
-
-          const icon = createCustomMarkerIcon(h.category, isSelected, isAtRisk, Boolean(h.has_3d));
-
-          return (
-            <Marker
-              key={`h-${h.id}`}
-              position={[h.lat, h.lon]}
-              icon={icon}
-              zIndexOffset={isSelected ? 1000 : 100}
-              eventHandlers={{
-                click: () => {
-                  if (onSelectHeritage) onSelectHeritage(h.id);
-                },
-              }}
+    <div className="relative w-full space-y-2.5">
+      {/* Top Controls: Atlas Projection Switcher Pill */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-serif font-bold text-[#78350F]">Atlas View:</span>
+          <div className="flex items-center p-1 bg-[#FAF6EE] rounded-2xl border border-[#E2D8C3] text-xs shadow-xs">
+            <button
+              onClick={() => setMapMode("2D")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-xl font-bold transition-all ${
+                mapMode === "2D"
+                  ? "bg-[#2A2421] text-white shadow-xs"
+                  : "text-[#78350F] hover:text-[#1C1917]"
+              }`}
             >
-              <Popup className="dharohar-custom-popup">
-                <div className="p-1 min-w-[220px] max-w-[260px] text-stone-900">
-                  {h.image_url && (
-                    <div className="w-full h-24 rounded-lg overflow-hidden mb-2 bg-stone-200">
-                      <img
-                        src={h.image_url}
-                        alt={h.image_alt || h.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
+              <MapIcon className="w-3.5 h-3.5 text-amber-500" />
+              <span>Vector Atlas (Approved)</span>
+            </button>
+            <button
+              onClick={() => setMapMode("3D")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-xl font-bold transition-all ${
+                mapMode === "3D"
+                  ? "bg-[#2A2421] text-white shadow-xs"
+                  : "text-[#78350F] hover:text-[#1C1917]"
+              }`}
+            >
+              <Box className="w-3.5 h-3.5 text-amber-500" />
+              <span>3D Extruded Relief</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2 text-xs text-[#574E45]">
+          <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+          <span>Survey of India Boundaries Strictly Bounded</span>
+        </div>
+      </div>
+
+      {/* Map Container Area */}
+      <div className="relative w-full rounded-3xl overflow-hidden shadow-lg border border-[#E2D8C3]">
+        {/* Floating Right-Side Control Toolbar (Section 7) */}
+        <IndiaMapToolbar
+          onSearchOpen={() => setSearchModalOpen(true)}
+          onRecenter={handleRecenter}
+          layers={layers}
+          onToggleLayer={handleToggleLayer}
+          selectedState={selectedState}
+          onSelectState={onSelectState}
+        />
+
+        {/* View Mode: 2D Vector Map vs 3D Extruded Map */}
+        {mapMode === "2D" ? (
+          <India2DVectorMap
+            height={height}
+            selectedState={selectedState}
+            onSelectState={onSelectState}
+            onSelectHeritage={onSelectHeritage}
+            onOpenDossier={handleOpenItemDossier}
+          />
+        ) : (
+          <India3DMap
+            heritage={heritage}
+            events={events}
+            height={height}
+            selectedState={selectedState}
+            activeHeritageId={activeId}
+            onSelectState={onSelectState}
+            onSelectHeritage={(id) => {
+              const matched = heritage.find((h) => h.id === id);
+              if (matched) handleOpenItemDossier(matched);
+              else if (onSelectHeritage) onSelectHeritage(id);
+            }}
+            onSelectEvent={onSelectEvent}
+          />
+        )}
+      </div>
+
+      {/* SEARCH MODAL OVERLAY (Section 29) */}
+      {searchModalOpen && (
+        <div className="fixed inset-0 z-[700] flex items-start justify-center pt-20 p-4 bg-stone-950/60 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-xl rounded-3xl bg-[#FAF6EE] border border-[#E0D5BE] shadow-2xl p-5 space-y-4 text-[#2A2421]">
+            <div className="flex items-center justify-between border-b border-[#E8DFC8] pb-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-[#B45309]">
+                <Search className="w-4 h-4" />
+                <span>Search Dharohar Living Atlas</span>
+              </div>
+              <button
+                onClick={() => setSearchModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-[#EFE7D5] text-stone-500 hover:text-stone-900 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Input */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => handleSearchExecute(e.target.value)}
+                placeholder="Search a place, craft, food, fort, tradition or village..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white border border-[#E0D5BE] text-sm text-[#1C1917] placeholder-stone-400 focus:outline-none focus:border-[#B45309] shadow-inner"
+              />
+            </div>
+
+            {/* Results */}
+            <div className="max-h-80 overflow-y-auto space-y-3 pr-1 text-xs scrollbar-thin scrollbar-thumb-[#DFD5C0]">
+              {searching ? (
+                <div className="py-6 text-center text-stone-500 font-serif">
+                  Searching verified cultural database...
+                </div>
+              ) : searchQuery && searchResults.results_count === 0 ? (
+                <div className="py-6 text-center text-stone-500 font-serif">
+                  No matching verified traditions or places found for "{searchQuery}".
+                </div>
+              ) : (
+                <>
+                  {searchResults.heritage?.length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className="font-bold text-[10px] uppercase text-[#78350F] block">
+                        Verified Living Traditions:
+                      </span>
+                      {searchResults.heritage.map((h: any) => (
+                        <div
+                          key={h.id}
+                          onClick={() => {
+                            setSearchModalOpen(false);
+                            handleOpenItemDossier(h);
+                          }}
+                          className="p-2.5 rounded-xl bg-white border border-[#E2D8C3] hover:border-[#B45309] transition cursor-pointer flex items-center justify-between group"
+                        >
+                          <div>
+                            <span className="font-semibold text-[#1C1917] group-hover:text-[#B45309]">
+                              {h.name}
+                            </span>
+                            <span className="text-stone-500 block text-[11px]">
+                              {h.category} • {h.district ? `${h.district}, ` : ""}{h.state}
+                            </span>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-[#B45309]" />
+                        </div>
+                      ))}
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
-                      <span>{cfg.icon}</span>
-                      <span>{h.category.replace("_", " ")}</span>
-                    </span>
-                    {isAtRisk ? (
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                        Watch
+                  {searchResults.places?.length > 0 && (
+                    <div className="space-y-1.5 pt-2">
+                      <span className="font-bold text-[10px] uppercase text-[#78350F] block">
+                        Geographic Settlements & Districts:
                       </span>
-                    ) : (
-                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                        Verified
-                      </span>
-                    )}
-                  </div>
-
-                  <h4 className="font-serif text-sm font-bold text-stone-950 mb-0.5 leading-snug">
-                    {h.name}
-                  </h4>
-
-                  <p className="text-[11px] text-stone-600 mb-1.5 font-medium">
-                    📍 {h.district ? `${h.district}, ` : ""}{h.region} · {h.state}
-                  </p>
-
-                  <p className="text-xs text-stone-700 mb-2.5 line-clamp-2 leading-relaxed">
-                    {h.short_description || h.description}
-                  </p>
-
-                  <div className="flex items-center justify-between pt-1.5 border-t border-stone-200">
-                    {h.has_3d && (
-                      <span className="text-[10px] font-bold text-amber-700 flex items-center gap-0.5">
-                        <span>🔍 3D View</span>
-                      </span>
-                    )}
-                    <Link
-                      href={`/heritage/${h.id}`}
-                      className="ml-auto text-xs font-bold text-amber-800 hover:text-amber-950 underline flex items-center gap-1"
-                    >
-                      <span>Explore Tradition</span>
-                      <span>→</span>
-                    </Link>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
-
-        {/* Live Cultural Event Markers */}
-        {filteredEvents.map((ev) => {
-          if (!ev.lat || !ev.lon) return null;
-          const isLive = ev.status === "LIVE NOW" || ev.is_happening_today;
-          const eventIcon = createEventMarkerIcon(Boolean(isLive));
-
-          return (
-            <Marker
-              key={`ev-${ev.id}`}
-              position={[ev.lat, ev.lon]}
-              icon={eventIcon}
-              zIndexOffset={900}
-              eventHandlers={{
-                click: () => {
-                  if (onSelectEvent) onSelectEvent(ev);
-                },
-              }}
-            >
-              <Popup className="dharohar-custom-popup">
-                <div className="p-1 min-w-[240px] max-w-[280px] text-stone-900">
-                  <div className="flex items-center justify-between gap-1 mb-1.5">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-rose-600 text-white">
-                      {isLive ? "🔴 Live Now" : "📅 Upcoming Event"}
-                    </span>
-                    <span className="text-[10px] text-stone-500 font-semibold uppercase">{ev.category}</span>
-                  </div>
-
-                  <h4 className="font-serif text-sm font-bold text-stone-950 mb-1 leading-snug">
-                    {ev.title}
-                  </h4>
-
-                  <p className="text-[11px] text-stone-600 mb-1">
-                    📍 {ev.venue}, {ev.city}, {ev.state}
-                  </p>
-
-                  <p className="text-[11px] text-amber-800 font-semibold mb-2 flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-amber-700" />
-                    <span>{ev.start_date === ev.end_date ? ev.start_date : `${ev.start_date} → ${ev.end_date}`}</span>
-                  </p>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-stone-200">
-                    <a
-                      href={ev.directions_url || `https://www.google.com/maps/dir/?api=1&destination=${ev.lat},${ev.lon}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-bold text-amber-800 hover:text-amber-950 inline-flex items-center gap-1"
-                    >
-                      <Navigation className="w-3.5 h-3.5 fill-current" />
-                      <span>Directions</span>
-                    </a>
-
-                    <a
-                      href={`${API_BASE_URL}/api/events/${ev.event_id}/calendar.ics`}
-                      download={`${ev.event_id}.ics`}
-                      className="text-xs font-semibold text-stone-600 hover:text-stone-900"
-                    >
-                      + Calendar
-                    </a>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
-      </MapContainer>
-
-      {/* Floating Header: Search & State Switcher */}
-      <div className="absolute top-4 left-4 right-4 z-[400] flex flex-wrap items-center justify-between gap-2.5 pointer-events-none">
-        {/* Search Input on Map */}
-        <div className="pointer-events-auto flex items-center gap-2 px-3 py-2 rounded-2xl bg-stone-900/90 backdrop-blur-md border border-stone-700/80 shadow-lg text-stone-100 max-w-xs w-full">
-          <Search className="w-4 h-4 text-amber-400 shrink-0" />
-          <input
-            type="text"
-            placeholder="Search tradition, fort, craft..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent text-xs text-stone-100 placeholder-stone-400 focus:outline-none"
-          />
-        </div>
-
-        {/* 5 Layer Controls Toggle Button */}
-        <div className="pointer-events-auto flex items-center gap-2">
-          <button
-            onClick={() => setShowLayerPanel(!showLayerPanel)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-stone-900/90 backdrop-blur-md border border-stone-700/80 shadow-lg text-xs font-semibold text-amber-300 hover:bg-stone-800 transition-colors"
-          >
-            <Layers className="w-4 h-4 text-amber-400" />
-            <span>Map Layers</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Floating Layer Selection Panel */}
-      {showLayerPanel && (
-        <div className="absolute top-16 right-4 z-[400] w-64 bg-stone-900/95 backdrop-blur-md border border-stone-700 rounded-2xl p-4 shadow-2xl space-y-2.5 text-xs text-stone-200 animate-fade-in">
-          <div className="font-serif font-bold text-amber-400 text-sm pb-1 border-b border-stone-800 flex items-center justify-between">
-            <span>Dharohar Map Layers</span>
-            <span className="text-[10px] font-sans text-stone-400">Toggle filters</span>
+                      {searchResults.places.map((p: any) => (
+                        <div
+                          key={p.slug}
+                          onClick={() => {
+                            setSearchModalOpen(false);
+                            handleOpenItemDossier({
+                              name: p.name,
+                              slug: p.slug,
+                              district: p.district_slug,
+                              state: "Haryana",
+                              isGeographicOnly: !p.has_cultural_record,
+                              statusNotice: p.status_notice,
+                              lat: p.lat,
+                              lon: p.lon
+                            });
+                          }}
+                          className="p-2.5 rounded-xl bg-white border border-[#E2D8C3] hover:border-[#B45309] transition cursor-pointer flex items-center justify-between group"
+                        >
+                          <div>
+                            <span className="font-semibold text-[#1C1917] group-hover:text-[#B45309]">
+                              {p.name}
+                            </span>
+                            <span className="text-stone-500 block text-[11px]">
+                              {p.entity_type} • {p.district_slug || "Haryana"}
+                            </span>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            p.has_cultural_record
+                              ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                              : "bg-amber-100 text-amber-900 border border-amber-300"
+                          }`}>
+                            {p.has_cultural_record ? "Verified" : "Geographic Only"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-
-          <label className="flex items-center gap-2.5 cursor-pointer hover:text-amber-300">
-            <input
-              type="checkbox"
-              checked={layers.culture}
-              onChange={() => toggleLayer("culture")}
-              className="accent-amber-500 rounded"
-            />
-            <span className="font-semibold">Culture</span>
-            <span className="text-[10px] text-stone-400">(Crafts, Food, Art)</span>
-          </label>
-
-          <label className="flex items-center gap-2.5 cursor-pointer hover:text-amber-300">
-            <input
-              type="checkbox"
-              checked={layers.places}
-              onChange={() => toggleLayer("places")}
-              className="accent-amber-500 rounded"
-            />
-            <span className="font-semibold">Places</span>
-            <span className="text-[10px] text-stone-400">(Forts & Sacred Sites)</span>
-          </label>
-
-          <label className="flex items-center gap-2.5 cursor-pointer hover:text-amber-300">
-            <input
-              type="checkbox"
-              checked={layers.events}
-              onChange={() => toggleLayer("events")}
-              className="accent-rose-500 rounded"
-            />
-            <span className="font-semibold text-rose-300">🔴 Live Events</span>
-            <span className="text-[10px] text-stone-400">({filteredEvents.length})</span>
-          </label>
-
-          <label className="flex items-center gap-2.5 cursor-pointer hover:text-amber-300">
-            <input
-              type="checkbox"
-              checked={layers.learn}
-              onChange={() => toggleLayer("learn")}
-              className="accent-amber-500 rounded"
-            />
-            <span className="font-semibold">Traditional Knowledge</span>
-          </label>
         </div>
       )}
 
-      {/* Floating State Selector Pill Strip at Bottom Left */}
-      <div className="absolute bottom-4 left-4 z-[400] max-w-[85vw] sm:max-w-xl overflow-x-auto no-scrollbar flex items-center gap-1.5 p-1.5 bg-stone-900/90 backdrop-blur-md rounded-2xl border border-stone-800 shadow-xl">
-        <button
-          type="button"
-          onClick={() => onSelectState && onSelectState("ALL")}
-          className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-            !selectedState || selectedState === "ALL"
-              ? "bg-amber-600 text-stone-950 font-bold shadow-sm"
-              : "text-stone-300 hover:bg-stone-800"
-          }`}
-        >
-          All India
-        </button>
-
-        {Object.entries(INDIA_STATES_DATA)
-          .slice(0, 10)
-          .map(([sKey, sInfo]) => {
-            const isActive = selectedState?.toLowerCase() === sKey;
-            return (
-              <button
-                key={sKey}
-                type="button"
-                onClick={() => onSelectState && onSelectState(sInfo.name)}
-                className={`shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition ${
-                  isActive
-                    ? "bg-amber-500 text-stone-950 font-bold shadow-sm"
-                    : "text-stone-300 hover:bg-stone-800"
-                }`}
-              >
-                {sInfo.name}
-              </button>
-            );
-          })}
-      </div>
-
-      {/* Touch-Friendly Gesture Hint Badge */}
-      <div className="absolute bottom-4 right-4 z-[400] pointer-events-none hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-stone-900/90 backdrop-blur-md border border-stone-800 shadow-sm text-[11px] font-medium text-stone-300">
-        <span>🖐️ Pinch to zoom · Tap markers for living stories</span>
-      </div>
+      {/* LOCATION DOSSIER MODAL (Section 20, 21, 31) */}
+      <LocationDossier
+        isOpen={dossierOpen}
+        item={dossierItem}
+        onClose={() => setDossierOpen(false)}
+        onViewOnMap={(lat, lon) => {
+          setDossierOpen(false);
+          // Could center map on these coordinates
+        }}
+      />
     </div>
   );
 }
